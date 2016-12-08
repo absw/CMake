@@ -31,6 +31,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__MINGW64__)
+#include <sys/types.h>
+#endif
+
 #if defined(_MSC_VER)
 typedef unsigned short mode_t;
 #else

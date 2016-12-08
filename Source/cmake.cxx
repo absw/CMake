@@ -45,6 +45,10 @@
 #define CMAKE_USE_ECLIPSE
 #endif
 
+#if defined(CMAKE_BUILD_WITH_CMAKE) && defined(_WIN32)
+#  define CMAKE_USE_IAR
+#endif
+
 #if defined(__MINGW32__) && !defined(CMAKE_BUILD_WITH_CMAKE)
 #define CMAKE_BOOT_MINGW
 #endif
@@ -92,6 +96,10 @@
 
 #ifdef CMAKE_USE_ECLIPSE
 #include "cmExtraEclipseCDT4Generator.h"
+#endif
+
+#ifdef CMAKE_USE_IAR
+#include "cmExtraIarGenerator.h"
 #endif
 
 #if defined(__APPLE__)
@@ -896,6 +904,10 @@ void cmake::AddDefaultExtraGenerators()
 
 #ifdef CMAKE_USE_KDEVELOP
   this->ExtraGenerators.push_back(cmGlobalKdevelopGenerator::GetFactory());
+#endif
+
+#ifdef CMAKE_USE_IAR
+  this->ExtraGenerators.push_back(cmExtraIarGenerator::GetFactory());
 #endif
 #endif
 }
