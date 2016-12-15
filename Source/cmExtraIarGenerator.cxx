@@ -1055,7 +1055,7 @@ void cmExtraIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
 
   cmExtraIarGenerator::BuildConfig buildCfg;
   buildCfg.name = GLOBALCFG.buildType;
-  buildCfg.isDebug = (GLOBALCFG.buildType == "Debug");
+  buildCfg.isDebug = (GLOBALCFG.buildType != "Release");
   buildCfg.exeDir = buildCfg.name;
   buildCfg.objectDir = buildCfg.exeDir;
   buildCfg.objectDir += "/Object";
@@ -1329,7 +1329,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("IccLang")->NewState("2");
   iccArmData->NewOption("IccCDialect")->NewState("1");
   iccArmData->NewOption("IccAllowVLA")->NewState("0");
-  iccArmData->NewOption("IccCppDialect")->NewState("2");
+  iccArmData->NewOption("IccCppDialect")->NewState("1");
   iccArmData->NewOption("IccExceptions")->NewState("0");
   iccArmData->NewOption("IccRTTI")->NewState("0");
   iccArmData->NewOption("IccStaticDestr")->NewState("0");
