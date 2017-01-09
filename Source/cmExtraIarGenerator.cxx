@@ -558,8 +558,22 @@ void cmExtraIarGenerator::Generate()
       globalMakefile->GetSafeDefinition("IAR_LINKER_ENTRY_ROUTINE");
   GLOBALCFG.linkerIcfFile =
       globalMakefile->GetSafeDefinition("IAR_LINKER_ICF_FILE");
+  GLOBALCFG.linkerIcfOverride =
+      globalMakefile->GetSafeDefinition("IAR_LINKER_ICF_OVERRIDE");
   GLOBALCFG.tgtArch =
       globalMakefile->GetSafeDefinition("IAR_TARGET_ARCHITECTURE");
+  GLOBALCFG.genLowLevelInterface =
+      globalMakefile->GetSafeDefinition("IAR_GEN_LOW_LEVEL_INTERFACE");
+  GLOBALCFG.CCEnableRemarks =
+      globalMakefile->GetSafeDefinition("IAR_CC_ENABLE_REMARKS");
+  GLOBALCFG.CCOptLevel =
+      globalMakefile->GetSafeDefinition("IAR_CC_OPT_LEVEL");
+  GLOBALCFG.CCOptLevelSlave =
+      globalMakefile->GetSafeDefinition("IAR_CC_OPT_LEVEL_SLAVE");
+  GLOBALCFG.UseFlashLoader =
+      globalMakefile->GetSafeDefinition("IAR_USE_FLASH_LOADER");
+  GLOBALCFG.linkerFlashLoadersV3file =
+      globalMakefile->GetSafeDefinition("FLASH_LOADERS_V3_FILE");
 
   GLOBALCFG.rtos = globalMakefile->GetSafeDefinition("IAR_TARGET_RTOS");
 
