@@ -279,7 +279,7 @@ private:
     std::string cpuName;
     std::string systemName;
     std::string dbgExtraOptions;
-    std::string dbgCspyFlashLoaderv3
+	std::string dbgCspyFlashLoaderv3;
     std::string dbgCspyMacfile;
     std::string dbgCspyMemfile;
     std::string dbgIjetProbeconfig;
@@ -288,8 +288,7 @@ private:
     std::string linkerIcfFile;
     std::string linkerIcfOverride;
     std::string linkerUseFlashLoader;
-    std::string linkerFlashLoadersV3file;
-    std::string tgtArc;
+    std::string tgtArch;
     std::string wbVersion;
     std::string chipSelection;
     std::string rtos;
