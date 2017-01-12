@@ -1299,7 +1299,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCEnableRemarks")
                 ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.CCEnableRemarks.c_str()) ? "1" : "0");
   iccArmData->NewOption("CCDiagSuppress")
-                ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.CCDiagSuppress.c_str()) ? "1" : "0");
+                ->NewState(GLOBALCFG.CCDiagSuppress.c_str());
   iccArmData->NewOption("CCDiagRemark")->NewState("");
   iccArmData->NewOption("CCDiagWarning")->NewState("");
   iccArmData->NewOption("CCDiagError")->NewState("");
@@ -1316,7 +1316,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCRequirePrototypes")->NewState("0");
   iccArmData->NewOption("CCMultibyteSupport")->NewState("0");
   iccArmData->NewOption("CCDiagWarnAreErr")
-      ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.CCDiagWarnAreErr.c_str()) ? "1" : "0")
+      ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.CCDiagWarnAreErr.c_str()) ? "1" : "0");
   iccArmData->NewOption("CCCompilerRuntimeInfo")->NewState("0");
   iccArmData->NewOption("IFpuProcessor")->NewState("1");
   iccArmData->NewOption("OutputFile")->NewState("$FILE_BNAME$.o");
