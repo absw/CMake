@@ -575,6 +575,8 @@ void cmExtraIarGenerator::Generate()
       globalMakefile->GetSafeDefinition("IAR_USE_FLASH_LOADER");
   GLOBALCFG.CCDiagSuppress =
       globalMakefile->GetSafeDefinition("IAR_CC_DIAG_SUPPRESS");
+  GLOBALCFG.CCDiagWarnAreErr =
+      globalMakefile->GetSafeDefinition("IAR_CC_DIAG_WARN_ARE_ERR");
 
   GLOBALCFG.rtos = globalMakefile->GetSafeDefinition("IAR_TARGET_RTOS");
 
@@ -1313,7 +1315,8 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCSignedPlainChar")->NewState("1");
   iccArmData->NewOption("CCRequirePrototypes")->NewState("0");
   iccArmData->NewOption("CCMultibyteSupport")->NewState("0");
-  iccArmData->NewOption("CCDiagWarnAreErr")->NewState("1");
+  iccArmData->NewOption("CCDiagWarnAreErr")
+      ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.CCDiagWarnAreErr.c_str()) ? "1" : "0")
   iccArmData->NewOption("CCCompilerRuntimeInfo")->NewState("0");
   iccArmData->NewOption("IFpuProcessor")->NewState("1");
   iccArmData->NewOption("OutputFile")->NewState("$FILE_BNAME$.o");
