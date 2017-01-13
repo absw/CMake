@@ -1229,7 +1229,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir + "/" + this->name);
   generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir + "/" + this->name);
   generalData->NewOption("GEndianMode")->NewState("0");
-  generalData->NewOption("Input variant", 3)->NewState("7");
+  generalData->NewOption("Input variant", 3)->NewState("0");
   generalData->NewOption("Input description")
               ->NewState("No specifier n, no float nor "
                   "long long, no scan set,"
