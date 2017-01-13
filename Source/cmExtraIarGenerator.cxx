@@ -1231,12 +1231,10 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   generalData->NewOption("GEndianMode")->NewState("0");
   generalData->NewOption("Input variant", 3)->NewState("0");
   generalData->NewOption("Input description")
-              ->NewState("No specifier n, no float nor "
-                  "long long, no scan set,"
-                  " no assignment suppressing, without multibyte support.");
-  generalData->NewOption("Output variant", 2)->NewState("4");
+              ->NewState("Automatic choice of formatter.");
+  generalData->NewOption("Output variant", 2)->NewState("0");
   generalData->NewOption("Output description")
-                ->NewState("No specifier a, A, without multibyte support.");
+                ->NewState("Automatic choice of formatter.");
   generalData->NewOption("GOutputBinary")
                 ->NewState(this->isLib ? "1" : "0");
   generalData->NewOption("OGCoreOrChip")->NewState("1");
