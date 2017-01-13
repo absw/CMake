@@ -1228,7 +1228,6 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   generalData->NewOption("ExePath")->NewState(this->buildCfg.exeDir);
   generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir + "/" + this->name);
   generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir + "/" + this->name);
-  generalData->NewOption("Variant", 20)->NewState("42");
   generalData->NewOption("GEndianMode")->NewState("0");
   generalData->NewOption("Input variant", 3)->NewState("7");
   generalData->NewOption("Input description")
