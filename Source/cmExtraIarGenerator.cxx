@@ -1273,7 +1273,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
                     "11111001111011111011111111111111111");
   generalData->NewOption("RTConfigPath2")
               ->NewState(std::string("$TOOLKIT_DIR$\\INC\\c\\DLib_Config_") + cmExtraIarGenerator::GLOBALCFG.compilerDlibConfig + ".h");
-  generalData->NewOption("GFPUCoreSlave", 20)->NewState("42");
+  generalData->NewOption("GFPUCoreSlave2", 20)->NewState("42");
   generalData->NewOption("GBECoreSlave", 20)->NewState("42");
   generalData->NewOption("OGUseCmsis")->NewState("0");
   generalData->NewOption("OGUseCmsisDspLib")->NewState("0");
