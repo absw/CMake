@@ -1461,7 +1461,8 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   ilinkData->NewOption("IlinkLogModule")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogSection")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogVeneer")->NewState(this->buildCfg.isDebug ? "1" : "0");
-  ilinkData->NewOption("IlinkIcfOverride")->NewState("0");
+  ilinkData->NewOption("IlinkIcfOverride")
+                ->NewState(cmExtraIarGenerator::GLOBALCFG.linkerIcfOverride);
   ilinkData->NewOption("IlinkIcfFile")->NewState(this->buildCfg.icfPath);
   ilinkData->NewOption("IlinkIcfFileSlave")->NewState("");
   ilinkData->NewOption("IlinkEnableRemarks")->NewState("0");
