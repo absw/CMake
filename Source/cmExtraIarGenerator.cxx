@@ -1145,6 +1145,9 @@ void cmExtraIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
     buildCfg.compilerOpts.push_back(*it);
     }
 
+  std::string importedLocationStr = std::string("IMPORTED_LOCATION_")
+                  + cmSystemTools::UpperCase(GLOBALCFG.buildType);
+
   // Libraries:
   const cmTarget::LinkLibraryVectorType& libs =
       tgt.GetOriginalLinkLibraries();
@@ -1157,8 +1160,18 @@ void cmExtraIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
       {
       if (it->first == (*it2)->GetName())
         {
-          buildCfg.libraries
-          .push_back((*it2)->GetProperty(std::string("IMPORTED_LOCATION_")+cmSystemTools::UpperCase(GLOBALCFG.buildType)));
+          const char* pPropertyStr = (*it2)->GetProperty(importedLocationStr);
+          const char* pNoBtPropertyStr = (*it2)->GetProperty(std::string("IMPORTED_LOCATION"));
+
+          if (pPropertyStr != NULL)
+          {
+              buildCfg.libraries.push_back(pPropertyStr);
+          }
+          else if (pNoBtPropertyStr != NULL)
+          {
+              buildCfg.libraries.push_back(pNoBtPropertyStr);
+          }
+
           found = true;
           break;
         }

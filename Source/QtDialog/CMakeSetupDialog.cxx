@@ -496,7 +496,8 @@ QString CMakeSetupDialog::getProjectFilename()
 {
   QStringList nameFilter;
   nameFilter << "*.sln"
-             << "*.xcodeproj";
+             << "*.xcodeproj"
+             << "*.eww";
   QDir directory(this->BinaryDirectory->currentText());
   QStringList nlnFile = directory.entryList(nameFilter);
 
