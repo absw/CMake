@@ -59,12 +59,25 @@ int cmCPackProductBuildGenerator::PackageFiles()
     }
   }
 
-  // Copy or create all of the resource files we need.
   std::string resDir = packageDirFileName + "/Contents";
+
+  if (this->IsSet("CPACK_PRODUCTBUILD_RESOURCES_DIR")) {
+    std::string userResDir =
+      this->GetOption("CPACK_PRODUCTBUILD_RESOURCES_DIR");
+
+    if (!cmSystemTools::CopyADirectory(userResDir, resDir)) {
+      cmCPackLogger(cmCPackLog::LOG_ERROR, "Problem copying the resource files"
+                      << std::endl);
+      return 0;
+    }
+  }
+
+  // Copy or create all of the resource files we need.
   if (!this->CopyCreateResourceFile("License", resDir) ||
       !this->CopyCreateResourceFile("ReadMe", resDir) ||
       !this->CopyCreateResourceFile("Welcome", resDir)) {
-    cmCPackLogger(cmCPackLog::LOG_ERROR, "Problem copying the resource files"
+    cmCPackLogger(cmCPackLog::LOG_ERROR,
+                  "Problem copying the License, ReadMe and Welcome files"
                     << std::endl);
     return 0;
   }
@@ -75,6 +88,14 @@ int cmCPackProductBuildGenerator::PackageFiles()
 
   std::string version = this->GetOption("CPACK_PACKAGE_VERSION");
   std::string productbuild = this->GetOption("CPACK_COMMAND_PRODUCTBUILD");
+  std::string identityName;
+  if (const char* n = this->GetOption("CPACK_PRODUCTBUILD_IDENTITY_NAME")) {
+    identityName = n;
+  }
+  std::string keychainPath;
+  if (const char* p = this->GetOption("CPACK_PRODUCTBUILD_KEYCHAIN_PATH")) {
+    keychainPath = p;
+  }
 
   pkgCmd << productbuild << " --distribution \"" << packageDirFileName
          << "/Contents/distribution.dist\""
@@ -82,6 +103,9 @@ int cmCPackProductBuildGenerator::PackageFiles()
          << "\""
          << " --resources \"" << resDir << "\""
          << " --version \"" << version << "\""
+         << (identityName.empty() ? "" : " --sign \"" + identityName + "\"")
+         << (keychainPath.empty() ? ""
+                                  : " --keychain \"" + keychainPath + "\"")
          << " \"" << packageFileNames[0] << "\"";
 
   // Run ProductBuild
@@ -193,13 +217,28 @@ bool cmCPackProductBuildGenerator::GenerateComponentPackage(
 
   std::string version = this->GetOption("CPACK_PACKAGE_VERSION");
   std::string pkgbuild = this->GetOption("CPACK_COMMAND_PKGBUILD");
+  std::string identityName;
+  if (const char* n = this->GetOption("CPACK_PKGBUILD_IDENTITY_NAME")) {
+    identityName = n;
+  }
+  std::string keychainPath;
+  if (const char* p = this->GetOption("CPACK_PKGBUILD_KEYCHAIN_PATH")) {
+    keychainPath = p;
+  }
 
   pkgCmd << pkgbuild << " --root \"" << packageDir << "\""
          << " --identifier \"" << pkgId << "\""
          << " --scripts \"" << scriptDir << "\""
          << " --version \"" << version << "\""
          << " --install-location \"/\""
+         << (identityName.empty() ? "" : " --sign \"" + identityName + "\"")
+         << (keychainPath.empty() ? ""
+                                  : " --keychain \"" + keychainPath + "\"")
          << " \"" << packageFile << "\"";
+
+  if (component && !component->Plist.empty()) {
+    pkgCmd << " --component-plist \"" << component->Plist << "\"";
+  }
 
   // Run ProductBuild
   return RunProductBuild(pkgCmd.str());

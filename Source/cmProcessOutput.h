@@ -3,7 +3,7 @@
 #ifndef cmProcessOutput_h
 #define cmProcessOutput_h
 
-#include <cmConfigure.h> // IWYU pragma: keep
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include <stddef.h>
 #include <string>
@@ -32,7 +32,7 @@ public:
   * \param name a encoding name.
   * \return encoding enum value or Auto if \a name was not found.
   */
-  static Encoding FindEncoding(std::string name);
+  static Encoding FindEncoding(std::string const& name);
 
   /// The code page that is used as internal encoding to which we will encode.
   static unsigned int defaultCodepage;

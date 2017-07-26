@@ -3,11 +3,11 @@
 #ifndef cmCTestTestHandler_h
 #define cmCTestTestHandler_h
 
-#include <cmConfigure.h>
+#include "cmConfigure.h"
 
 #include "cmCTestGenericHandler.h"
 
-#include <cmsys/RegularExpression.hxx>
+#include "cmsys/RegularExpression.hxx"
 #include <iosfwd>
 #include <map>
 #include <set>
@@ -90,6 +90,11 @@ public:
    */
   bool SetTestsProperties(const std::vector<std::string>& args);
 
+  /**
+   * Set directory properties
+   */
+  bool SetDirectoryProperties(const std::vector<std::string>& args);
+
   void Initialize() CM_OVERRIDE;
 
   // NOTE: This struct is Saved/Restored
@@ -114,6 +119,7 @@ public:
     std::map<std::string, std::string> Measurements;
     bool IsInBasedOnREOptions;
     bool WillFail;
+    bool Disabled;
     float Cost;
     int PreviousRuns;
     bool RunSerial;
@@ -143,6 +149,7 @@ public:
     double ExecutionTime;
     int ReturnValue;
     int Status;
+    std::string ExceptionStatus;
     bool CompressOutput;
     std::string CompletionStatus;
     std::string Output;
@@ -226,6 +233,8 @@ private:
   virtual void GenerateDartOutput(cmXMLWriter& xml);
 
   void PrintLabelSummary();
+  void PrintSubprojectSummary();
+
   /**
    * Run the tests for a directory and any subdirectories
    */
@@ -261,7 +270,7 @@ private:
    */
   std::string FindTheExecutable(const char* exe);
 
-  const char* GetTestStatus(int status);
+  const char* GetTestStatus(const cmCTestTestResult*);
   void ExpandTestsToRunInformation(size_t numPossibleTests);
   void ExpandTestsToRunInformationForRerunFailed();
 
@@ -279,6 +288,9 @@ private:
   std::string ExcludeLabelRegExp;
   std::string IncludeRegExp;
   std::string ExcludeRegExp;
+  std::string ExcludeFixtureRegExp;
+  std::string ExcludeFixtureSetupRegExp;
+  std::string ExcludeFixtureCleanupRegExp;
   cmsys::RegularExpression IncludeLabelRegularExpression;
   cmsys::RegularExpression ExcludeLabelRegularExpression;
   cmsys::RegularExpression IncludeTestsRegularExpression;

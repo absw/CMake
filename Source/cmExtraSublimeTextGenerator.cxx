@@ -2,7 +2,7 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmExtraSublimeTextGenerator.h"
 
-#include <cmsys/RegularExpression.hxx>
+#include "cmsys/RegularExpression.hxx"
 #include <set>
 #include <sstream>
 #include <string.h>
@@ -172,7 +172,7 @@ void cmExtraSublimeTextGenerator::AppendAllTargets(
   cmGeneratedFileStream& fout, MapSourceFileFlags& sourceFileFlags)
 {
   std::string make = mf->GetRequiredDefinition("CMAKE_MAKE_PROGRAM");
-  std::string compiler = "";
+  std::string compiler;
   if (!lgs.empty()) {
     this->AppendTarget(fout, "all", lgs[0], CM_NULLPTR, make.c_str(), mf,
                        compiler.c_str(), sourceFileFlags, true);
@@ -323,16 +323,12 @@ std::string cmExtraSublimeTextGenerator::BuildMakeCommand(
     std::string makefileName = cmSystemTools::ConvertToOutputPath(makefile);
     command += ", \"/NOLOGO\", \"/f\", \"";
     command += makefileName + "\"";
-    command += ", \"VERBOSE=1\", \"";
-    command += target;
-    command += "\"";
+    command += ", \"" + target + "\"";
   } else if (generator == "Ninja") {
     std::string makefileName = cmSystemTools::ConvertToOutputPath(makefile);
     command += ", \"-f\", \"";
     command += makefileName + "\"";
-    command += ", \"-v\", \"";
-    command += target;
-    command += "\"";
+    command += ", \"" + target + "\"";
   } else {
     std::string makefileName;
     if (generator == "MinGW Makefiles") {
@@ -344,9 +340,7 @@ std::string cmExtraSublimeTextGenerator::BuildMakeCommand(
     }
     command += ", \"-f\", \"";
     command += makefileName + "\"";
-    command += ", \"VERBOSE=1\", \"";
-    command += target;
-    command += "\"";
+    command += ", \"" + target + "\"";
   }
   return command;
 }

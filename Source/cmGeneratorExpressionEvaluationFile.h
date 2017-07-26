@@ -3,20 +3,16 @@
 #ifndef cmGeneratorExpressionEvaluationFile_h
 #define cmGeneratorExpressionEvaluationFile_h
 
-#include <cmConfigure.h> // IWYU pragma: keep
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include <map>
 #include <string>
 #include <vector>
 
 #include "cmGeneratorExpression.h"
+#include "cmPolicies.h"
 #include "cm_auto_ptr.hxx"
-
-#if defined(_MSC_VER)
-typedef unsigned short mode_t;
-#else
-#include <sys/types.h>
-#endif
+#include "cm_sys_stat.h"
 
 class cmLocalGenerator;
 
@@ -26,7 +22,8 @@ public:
   cmGeneratorExpressionEvaluationFile(
     const std::string& input,
     CM_AUTO_PTR<cmCompiledGeneratorExpression> outputFileExpr,
-    CM_AUTO_PTR<cmCompiledGeneratorExpression> condition, bool inputIsContent);
+    CM_AUTO_PTR<cmCompiledGeneratorExpression> condition, bool inputIsContent,
+    cmPolicies::PolicyStatus policyStatusCMP0070);
 
   void Generate(cmLocalGenerator* lg);
 
@@ -40,12 +37,21 @@ private:
                 cmCompiledGeneratorExpression* inputExpression,
                 std::map<std::string, std::string>& outputFiles, mode_t perm);
 
+  enum PathRole
+  {
+    PathForInput,
+    PathForOutput
+  };
+  std::string FixRelativePath(std::string const& filePath, PathRole role,
+                              cmLocalGenerator* lg);
+
 private:
   const std::string Input;
   const CM_AUTO_PTR<cmCompiledGeneratorExpression> OutputFileExpr;
   const CM_AUTO_PTR<cmCompiledGeneratorExpression> Condition;
   std::vector<std::string> Files;
   const bool InputIsContent;
+  cmPolicies::PolicyStatus PolicyStatusCMP0070;
 };
 
 #endif

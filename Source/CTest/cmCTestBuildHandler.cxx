@@ -11,9 +11,9 @@
 #include "cmSystemTools.h"
 #include "cmXMLWriter.h"
 
-#include <cmsys/Directory.hxx>
-#include <cmsys/FStream.hxx>
-#include <cmsys/Process.h>
+#include "cmsys/Directory.hxx"
+#include "cmsys/FStream.hxx"
+#include "cmsys/Process.h"
 #include <set>
 #include <stdlib.h>
 #include <string.h>
@@ -488,6 +488,7 @@ int cmCTestBuildHandler::ProcessHandler()
 void cmCTestBuildHandler::GenerateXMLHeader(cmXMLWriter& xml)
 {
   this->CTest->StartXML(xml, this->AppendXML);
+  this->CTest->GenerateSubprojectsOutput(xml);
   xml.StartElement("Build");
   xml.Element("StartDateTime", this->StartBuild);
   xml.Element("StartBuildTime",
@@ -506,7 +507,7 @@ public:
     : FTC(CM_NULLPTR)
   {
   }
-  bool operator()(std::string const& l, std::string const& r)
+  bool operator()(std::string const& l, std::string const& r) const
   {
     // Order files by modification time.  Use lexicographic order
     // among files with the same time.
@@ -596,10 +597,10 @@ void cmCTestBuildHandler::GenerateXMLLogScraped(cmXMLWriter& xml)
           // At this point we need to make this->SourceFile relative to
           // the source root of the project, so cvs links will work
           cmSystemTools::ConvertToUnixSlashes(cm->SourceFile);
-          if (cm->SourceFile.find("/.../") != cm->SourceFile.npos) {
+          if (cm->SourceFile.find("/.../") != std::string::npos) {
             cmSystemTools::ReplaceString(cm->SourceFile, "/.../", "");
             std::string::size_type p = cm->SourceFile.find('/');
-            if (p != cm->SourceFile.npos) {
+            if (p != std::string::npos) {
               cm->SourceFile =
                 cm->SourceFile.substr(p + 1, cm->SourceFile.size() - p);
             }
@@ -948,7 +949,7 @@ void cmCTestBuildHandler::ProcessBuffer(const char* data, size_t length,
   this->BuildOutputLogSize += length;
 
   // until there are any lines left in the buffer
-  while (1) {
+  while (true) {
     // Find the end of line
     t_BuildProcessingQueueType::iterator it;
     for (it = queue->begin(); it != queue->end(); ++it) {

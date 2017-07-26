@@ -2,7 +2,7 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmStringCommand.h"
 
-#include <cmsys/RegularExpression.hxx>
+#include "cmsys/RegularExpression.hxx"
 #include <ctype.h>
 #include <sstream>
 #include <stdio.h>
@@ -128,7 +128,7 @@ bool cmStringCommand::HandleToUpperLowerCommand(
     return false;
   }
 
-  std::string outvar = args[2];
+  std::string const& outvar = args[2];
   std::string output;
 
   if (toUpper) {
@@ -149,8 +149,8 @@ bool cmStringCommand::HandleAsciiCommand(std::vector<std::string> const& args)
     return false;
   }
   std::string::size_type cc;
-  std::string outvar = args[args.size() - 1];
-  std::string output = "";
+  std::string const& outvar = args[args.size() - 1];
+  std::string output;
   for (cc = 1; cc < args.size() - 1; cc++) {
     int ch = atoi(args[cc].c_str());
     if (ch > 0 && ch < 256) {
@@ -212,7 +212,7 @@ bool cmStringCommand::HandleRegexCommand(std::vector<std::string> const& args)
     this->SetError("sub-command REGEX requires a mode to be specified.");
     return false;
   }
-  std::string mode = args[1];
+  std::string const& mode = args[1];
   if (mode == "MATCH") {
     if (args.size() < 5) {
       this->SetError("sub-command REGEX, mode MATCH needs "
@@ -247,8 +247,8 @@ bool cmStringCommand::RegexMatch(std::vector<std::string> const& args)
 {
   //"STRING(REGEX MATCH <regular_expression> <output variable>
   // <input> [<input>...])\n";
-  std::string regex = args[2];
-  std::string outvar = args[3];
+  std::string const& regex = args[2];
+  std::string const& outvar = args[3];
 
   this->Makefile->ClearMatches();
   // Compile the regular expression.
@@ -288,8 +288,8 @@ bool cmStringCommand::RegexMatchAll(std::vector<std::string> const& args)
 {
   //"STRING(REGEX MATCHALL <regular_expression> <output variable> <input>
   // [<input>...])\n";
-  std::string regex = args[2];
-  std::string outvar = args[3];
+  std::string const& regex = args[2];
+  std::string const& outvar = args[3];
 
   this->Makefile->ClearMatches();
   // Compile the regular expression.
@@ -309,6 +309,7 @@ bool cmStringCommand::RegexMatchAll(std::vector<std::string> const& args)
   std::string output;
   const char* p = input.c_str();
   while (re.find(p)) {
+    this->Makefile->ClearMatches();
     this->Makefile->StoreMatches(re);
     std::string::size_type l = re.start();
     std::string::size_type r = re.end();
@@ -334,15 +335,15 @@ bool cmStringCommand::RegexReplace(std::vector<std::string> const& args)
 {
   //"STRING(REGEX REPLACE <regular_expression> <replace_expression>
   // <output variable> <input> [<input>...])\n"
-  std::string regex = args[2];
-  std::string replace = args[3];
-  std::string outvar = args[4];
+  std::string const& regex = args[2];
+  std::string const& replace = args[3];
+  std::string const& outvar = args[4];
 
   // Pull apart the replace expression to find the escaped [0-9] values.
   std::vector<RegexReplacement> replacement;
   std::string::size_type l = 0;
   while (l < replace.length()) {
-    std::string::size_type r = replace.find("\\", l);
+    std::string::size_type r = replace.find('\\', l);
     if (r == std::string::npos) {
       r = replace.length();
       replacement.push_back(replace.substr(l, r - l));
@@ -391,6 +392,7 @@ bool cmStringCommand::RegexReplace(std::vector<std::string> const& args)
   std::string output;
   std::string::size_type base = 0;
   while (re.find(input.c_str() + base)) {
+    this->Makefile->ClearMatches();
     this->Makefile->StoreMatches(re);
     std::string::size_type l2 = re.start();
     std::string::size_type r = re.end();
@@ -502,7 +504,7 @@ bool cmStringCommand::HandleCompareCommand(
     this->SetError("sub-command COMPARE requires a mode to be specified.");
     return false;
   }
-  std::string mode = args[1];
+  std::string const& mode = args[1];
   if ((mode == "EQUAL") || (mode == "NOTEQUAL") || (mode == "LESS") ||
       (mode == "LESS_EQUAL") || (mode == "GREATER") ||
       (mode == "GREATER_EQUAL")) {

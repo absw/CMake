@@ -291,6 +291,8 @@ from the input content to produce the output content.  The options are:
 
 ``INPUT <input-file>``
   Use the content from a given file as input.
+  A relative path is treated with respect to the value of
+  :variable:`CMAKE_CURRENT_SOURCE_DIR`.  See policy :policy:`CMP0070`.
 
 ``OUTPUT <output-file>``
   Specify the output file name to generate.  Use generator expressions
@@ -298,11 +300,19 @@ from the input content to produce the output content.  The options are:
   name.  Multiple configurations may generate the same output file only
   if the generated content is identical.  Otherwise, the ``<output-file>``
   must evaluate to an unique name for each configuration.
+  A relative path (after evaluating generator expressions) is treated
+  with respect to the value of :variable:`CMAKE_CURRENT_BINARY_DIR`.
+  See policy :policy:`CMP0070`.
 
 Exactly one ``CONTENT`` or ``INPUT`` option must be given.  A specific
 ``OUTPUT`` file may be named by at most one invocation of ``file(GENERATE)``.
-Generated files are modified on subsequent cmake runs only if their content
-is changed.
+Generated files are modified and their timestamp updated on subsequent cmake
+runs only if their content is changed.
+
+Note also that ``file(GENERATE)`` does not create the output file until the
+generation phase. The output file will not yet have been written when the
+``file(GENERATE)`` command returns, it is written only after processing all
+of a project's ``CMakeLists.txt`` files.
 
 ------------------------------------------------------------------------------
 

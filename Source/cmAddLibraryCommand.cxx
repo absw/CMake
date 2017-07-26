@@ -37,7 +37,7 @@ bool cmAddLibraryCommand::InitialPass(std::vector<std::string> const& args,
 
   std::vector<std::string>::const_iterator s = args.begin();
 
-  std::string libName = *s;
+  std::string const& libName = *s;
 
   ++s;
 
@@ -173,7 +173,7 @@ bool cmAddLibraryCommand::InitialPass(std::vector<std::string> const& args,
     !cmGlobalGenerator::IsReservedTarget(libName);
 
   if (nameOk && !importTarget && !isAlias) {
-    nameOk = libName.find(":") == std::string::npos;
+    nameOk = libName.find(':') == std::string::npos;
   }
   if (!nameOk) {
     cmake::MessageType messageType = cmake::AUTHOR_WARNING;
@@ -297,10 +297,15 @@ bool cmAddLibraryCommand::InitialPass(std::vector<std::string> const& args,
       return false;
     }
     if (type == cmStateEnums::OBJECT_LIBRARY) {
-      this->Makefile->IssueMessage(
-        cmake::FATAL_ERROR,
-        "The OBJECT library type may not be used for IMPORTED libraries.");
-      return true;
+      std::string reason;
+      if (!this->Makefile->GetGlobalGenerator()->HasKnownObjectFileLocation(
+            &reason)) {
+        this->Makefile->IssueMessage(
+          cmake::FATAL_ERROR,
+          "The OBJECT library type may not be used for IMPORTED libraries" +
+            reason + ".");
+        return true;
+      }
     }
     if (type == cmStateEnums::INTERFACE_LIBRARY) {
       if (!cmGeneratorExpression::IsValidTargetName(libName)) {

@@ -2,6 +2,7 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmMakefileExecutableTargetGenerator.h"
 
+#include <algorithm>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -20,6 +21,7 @@
 #include "cmState.h"
 #include "cmStateDirectory.h"
 #include "cmStateSnapshot.h"
+#include "cmStateTypes.h"
 #include "cmSystemTools.h"
 #include "cm_auto_ptr.hxx"
 #include "cmake.h"
@@ -104,10 +106,12 @@ void cmMakefileExecutableTargetGenerator::WriteDeviceExecutableRule(
 
   // Get the language to use for linking this library.
   std::string linkLanguage = "CUDA";
+  std::string const objExt =
+    this->Makefile->GetSafeDefinition("CMAKE_CUDA_OUTPUT_EXTENSION");
 
   // Get the name of the device object to generate.
   std::string const targetOutputReal =
-    this->GeneratorTarget->ObjectDirectory + "cmake_device_link.o";
+    this->GeneratorTarget->ObjectDirectory + "cmake_device_link" + objExt;
   this->DeviceLinkObject = targetOutputReal;
 
   this->NumberOfProgressActions++;
@@ -118,7 +122,11 @@ void cmMakefileExecutableTargetGenerator::WriteDeviceExecutableRule(
     std::string buildEcho = "Linking ";
     buildEcho += linkLanguage;
     buildEcho += " device code ";
-    buildEcho += targetOutputReal;
+    buildEcho += this->LocalGenerator->ConvertToOutputFormat(
+      this->LocalGenerator->MaybeConvertToRelativePath(
+        this->LocalGenerator->GetCurrentBinaryDirectory(),
+        this->DeviceLinkObject),
+      cmOutputConverter::SHELL);
     this->LocalGenerator->AppendEcho(
       commands, buildEcho, cmLocalUnixMakefileGenerator3::EchoLink, &progress);
   }
@@ -142,7 +150,8 @@ void cmMakefileExecutableTargetGenerator::WriteDeviceExecutableRule(
                                       linkLanguage, *this->GeneratorTarget));
 
   // Add language feature flags.
-  this->AddFeatureFlags(flags, linkLanguage);
+  this->LocalGenerator->AddLanguageFlagsForLinking(
+    flags, this->GeneratorTarget, linkLanguage, this->ConfigName);
 
   this->LocalGenerator->AddArchitectureFlags(flags, this->GeneratorTarget,
                                              linkLanguage, this->ConfigName);
@@ -154,15 +163,6 @@ void cmMakefileExecutableTargetGenerator::WriteDeviceExecutableRule(
   linkFlagsConfig += cmSystemTools::UpperCase(this->ConfigName);
   this->LocalGenerator->AppendFlags(
     linkFlags, this->GeneratorTarget->GetProperty(linkFlagsConfig));
-
-  {
-    CM_AUTO_PTR<cmLinkLineComputer> linkLineComputer(
-      this->CreateLinkLineComputer(
-        this->LocalGenerator,
-        this->LocalGenerator->GetStateSnapshot().GetDirectory()));
-
-    this->AddModuleDefinitionFlag(linkLineComputer.get(), linkFlags);
-  }
 
   // Construct a list of files associated with this executable that
   // may need to be cleaned.
@@ -228,6 +228,11 @@ void cmMakefileExecutableTargetGenerator::WriteDeviceExecutableRule(
         this->LocalGenerator->GetCurrentBinaryDirectory(), targetOutputReal),
       output);
 
+    std::string targetFullPathCompilePDB = this->ComputeTargetCompilePDB();
+    std::string targetOutPathCompilePDB =
+      this->LocalGenerator->ConvertToOutputFormat(targetFullPathCompilePDB,
+                                                  cmOutputConverter::SHELL);
+
     vars.Language = linkLanguage.c_str();
     vars.Objects = buildObjs.c_str();
     vars.ObjectDir = objectDir.c_str();
@@ -235,6 +240,7 @@ void cmMakefileExecutableTargetGenerator::WriteDeviceExecutableRule(
     vars.LinkLibraries = linkLibs.c_str();
     vars.Flags = flags.c_str();
     vars.LinkFlags = linkFlags.c_str();
+    vars.TargetCompilePDB = targetOutPathCompilePDB.c_str();
 
     std::string launcher;
 
@@ -332,7 +338,8 @@ void cmMakefileExecutableTargetGenerator::WriteExecutableRule(bool relink)
   } else {
     cmSystemTools::MakeDirectory(outpath.c_str());
     if (!targetNameImport.empty()) {
-      outpathImp = this->GeneratorTarget->GetDirectory(this->ConfigName, true);
+      outpathImp = this->GeneratorTarget->GetDirectory(
+        this->ConfigName, cmStateEnums::ImportLibraryArtifact);
       cmSystemTools::MakeDirectory(outpathImp.c_str());
       outpathImp += "/";
     }
@@ -427,7 +434,8 @@ void cmMakefileExecutableTargetGenerator::WriteExecutableRule(bool relink)
   }
 
   // Add language feature flags.
-  this->AddFeatureFlags(flags, linkLanguage);
+  this->LocalGenerator->AddLanguageFlagsForLinking(
+    flags, this->GeneratorTarget, linkLanguage, this->ConfigName);
 
   this->LocalGenerator->AddArchitectureFlags(flags, this->GeneratorTarget,
                                              linkLanguage, this->ConfigName);
@@ -448,6 +456,9 @@ void cmMakefileExecutableTargetGenerator::WriteExecutableRule(bool relink)
 
     this->AddModuleDefinitionFlag(linkLineComputer.get(), linkFlags);
   }
+
+  this->LocalGenerator->AppendIPOLinkerFlags(linkFlags, this->GeneratorTarget,
+                                             this->ConfigName, linkLanguage);
 
   // Construct a list of files associated with this executable that
   // may need to be cleaned.
@@ -556,10 +567,7 @@ void cmMakefileExecutableTargetGenerator::WriteExecutableRule(bool relink)
     }
 
     // maybe create .def file from list of objects
-    if (this->GeneratorTarget->IsExecutableWithExports() &&
-        this->Makefile->IsOn("CMAKE_SUPPORT_WINDOWS_EXPORT_ALL_SYMBOLS")) {
-      this->GenDefFile(real_link_commands, linkFlags);
-    }
+    this->GenDefFile(real_link_commands);
 
     std::string manifests = this->GetManifests();
 

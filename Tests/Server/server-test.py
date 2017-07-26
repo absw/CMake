@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys, cmakelib, json, os, shutil
 
 debug = True
@@ -116,4 +117,4 @@ except:
     proc.terminate()
     raise
 
-sys.exit(0)
+sys.exit(proc.returncode)

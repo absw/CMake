@@ -3,7 +3,8 @@
 #ifndef cmCPackPKGGenerator_h
 #define cmCPackPKGGenerator_h
 
-#include <cmConfigure.h>
+#include "cmConfigure.h"
+
 #include <set>
 #include <sstream>
 #include <string>
@@ -26,7 +27,7 @@ public:
    * Construct generator
    */
   cmCPackPKGGenerator();
-  virtual ~cmCPackPKGGenerator();
+  ~cmCPackPKGGenerator() CM_OVERRIDE;
 
   bool SupportsComponentInstallation() const CM_OVERRIDE;
 

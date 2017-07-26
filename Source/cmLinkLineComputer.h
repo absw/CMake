@@ -4,20 +4,23 @@
 #ifndef cmLinkLineComputer_h
 #define cmLinkLineComputer_h
 
-#include <cmConfigure.h> // IWYU pragma: keep
+#include "cmConfigure.h"
 
 #include <string>
 
 #include "cmStateDirectory.h"
 
 class cmComputeLinkInformation;
+class cmGeneratorTarget;
 class cmOutputConverter;
 
 class cmLinkLineComputer
 {
+  CM_DISABLE_COPY(cmLinkLineComputer)
+
 public:
   cmLinkLineComputer(cmOutputConverter* outputConverter,
-                     cmStateDirectory stateDir);
+                     cmStateDirectory const& stateDir);
   virtual ~cmLinkLineComputer();
 
   void SetUseWatcomQuote(bool useWatcomQuote);
@@ -35,6 +38,9 @@ public:
 
   virtual std::string ComputeLinkLibraries(cmComputeLinkInformation& cli,
                                            std::string const& stdLibString);
+
+  virtual std::string GetLinkerLanguage(cmGeneratorTarget* target,
+                                        std::string const& config);
 
 protected:
   std::string ComputeLinkLibs(cmComputeLinkInformation& cli);

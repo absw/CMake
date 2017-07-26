@@ -48,6 +48,7 @@ cmExtraCodeBlocksGenerator::GetFactory()
 #if defined(_WIN32)
     factory.AddSupportedGlobalGenerator("MinGW Makefiles");
     factory.AddSupportedGlobalGenerator("NMake Makefiles");
+    factory.AddSupportedGlobalGenerator("NMake Makefiles JOM");
 // disable until somebody actually tests it:
 // this->AddSupportedGlobalGenerator("MSYS Makefiles");
 #endif
@@ -137,7 +138,6 @@ void Tree::InsertPath(const std::vector<std::string>& splitted,
   // last part of splitted
   newFolder.files.push_back(fileName);
   folders.push_back(newFolder);
-  return;
 }
 
 void Tree::BuildVirtualFolder(cmXMLWriter& xml) const
@@ -353,7 +353,7 @@ void cmExtraCodeBlocksGenerator::CreateNewProjectFile(
   all_files_map_t allFiles;
   std::vector<std::string> cFiles;
 
-  std::vector<std::string> srcExts =
+  std::vector<std::string> const& srcExts =
     this->GlobalGenerator->GetCMakeInstance()->GetSourceExtensions();
 
   for (std::vector<cmLocalGenerator*>::const_iterator lg = lgs.begin();
@@ -387,7 +387,7 @@ void cmExtraCodeBlocksGenerator::CreateNewProjectFile(
             bool isCFile = false;
             std::string lang = (*si)->GetLanguage();
             if (lang == "C" || lang == "CXX") {
-              std::string srcext = (*si)->GetExtension();
+              std::string const& srcext = (*si)->GetExtension();
               for (std::vector<std::string>::const_iterator ext =
                      srcExts.begin();
                    ext != srcExts.end(); ++ext) {
@@ -398,7 +398,7 @@ void cmExtraCodeBlocksGenerator::CreateNewProjectFile(
               }
             }
 
-            std::string fullPath = (*si)->GetFullPath();
+            std::string const& fullPath = (*si)->GetFullPath();
 
             if (isCFile) {
               cFiles.push_back(fullPath);
@@ -414,7 +414,7 @@ void cmExtraCodeBlocksGenerator::CreateNewProjectFile(
     }
   }
 
-  std::vector<std::string> headerExts =
+  std::vector<std::string> const& headerExts =
     this->GlobalGenerator->GetCMakeInstance()->GetHeaderExtensions();
 
   // The following loop tries to add header files matching to implementation
@@ -742,7 +742,7 @@ std::string cmExtraCodeBlocksGenerator::BuildMakeCommand(
   }
 
   std::string generator = this->GlobalGenerator->GetName();
-  if (generator == "NMake Makefiles") {
+  if (generator == "NMake Makefiles" || generator == "NMake Makefiles JOM") {
     // For Windows ConvertToOutputPath already adds quotes when required.
     // These need to be escaped, see
     // https://gitlab.kitware.com/cmake/cmake/issues/13952

@@ -149,4 +149,24 @@ macro(__android_compiler_common lang)
   if("x${lang}" STREQUAL "xCXX")
     __android_stl(CXX)
   endif()
+
+  # <ndk>/build/core/definitions.mk appends the sysroot's include directory
+  # explicitly at the end of the command-line include path so that it
+  # precedes the toolchain's builtin include directories.  This is
+  # necessary so that Android API-version-specific headers are preferred
+  # over those in the toolchain's `include-fixed` directory (which cannot
+  # possibly match all versions).
+  #
+  # Do not do this for a standalone toolchain because it is already
+  # tied to a specific API version.
+  if(CMAKE_ANDROID_NDK)
+    if(NOT CMAKE_ANDROID_NDK_DEPRECATED_HEADERS)
+      list(APPEND CMAKE_${lang}_STANDARD_INCLUDE_DIRECTORIES
+        "${CMAKE_SYSROOT_COMPILE}/usr/include"
+        "${CMAKE_SYSROOT_COMPILE}/usr/include/${CMAKE_ANDROID_ARCH_HEADER_TRIPLE}"
+        )
+    else()
+      list(APPEND CMAKE_${lang}_STANDARD_INCLUDE_DIRECTORIES "${CMAKE_SYSROOT}/usr/include")
+    endif()
+  endif()
 endmacro()

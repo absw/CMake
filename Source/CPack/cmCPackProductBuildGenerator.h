@@ -3,7 +3,8 @@
 #ifndef cmCPackProductBuildGenerator_h
 #define cmCPackProductBuildGenerator_h
 
-#include <cmConfigure.h>
+#include "cmConfigure.h"
+
 #include <string>
 
 #include "cmCPackGenerator.h"
@@ -24,7 +25,7 @@ public:
    * Construct generator
    */
   cmCPackProductBuildGenerator();
-  virtual ~cmCPackProductBuildGenerator();
+  ~cmCPackProductBuildGenerator() CM_OVERRIDE;
 
 protected:
   int InitializeInternal() CM_OVERRIDE;

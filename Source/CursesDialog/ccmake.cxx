@@ -1,6 +1,6 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
    file Copyright.txt or https://cmake.org/licensing for details.  */
-#include <cmConfigure.h>
+#include "cmConfigure.h"
 
 #include "cmCursesForm.h"
 #include "cmCursesMainForm.h"
@@ -10,7 +10,7 @@
 #include "cmSystemTools.h"
 #include "cmake.h"
 
-#include <cmsys/Encoding.hxx>
+#include "cmsys/Encoding.hxx"
 #include <iostream>
 #include <signal.h>
 #include <string.h>
@@ -52,8 +52,7 @@ void onsig(int /*unused*/)
     initscr();            /* Initialization */
     noecho();             /* Echo off */
     cbreak();             /* nl- or cr not needed */
-    keypad(stdscr, TRUE); /* Use key symbols as
-                             KEY_DOWN*/
+    keypad(stdscr, true); /* Use key symbols as KEY_DOWN */
     refresh();
     int x, y;
     getmaxyx(stdscr, y, x);
@@ -82,7 +81,7 @@ int main(int argc, char const* const* argv)
   cmDocumentation doc;
   doc.addCMakeStandardDocSections();
   if (doc.CheckOptions(argc, argv)) {
-    cmake hcm;
+    cmake hcm(cmake::RoleInternal);
     hcm.SetHomeDirectory("");
     hcm.SetHomeOutputDirectory("");
     hcm.AddCMakePaths();
@@ -128,8 +127,7 @@ int main(int argc, char const* const* argv)
   initscr();            /* Initialization */
   noecho();             /* Echo off */
   cbreak();             /* nl- or cr not needed */
-  keypad(stdscr, TRUE); /* Use key symbols as
-                           KEY_DOWN*/
+  keypad(stdscr, true); /* Use key symbols as KEY_DOWN */
 
   signal(SIGWINCH, onsig);
 

@@ -2,9 +2,10 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmTimestamp.h"
 
-#include <cmConfigure.h>
+#include "cmConfigure.h"
 #include <cstring>
 #include <sstream>
+#include <stdlib.h>
 
 #include "cmSystemTools.h"
 
@@ -12,6 +13,16 @@ std::string cmTimestamp::CurrentTime(const std::string& formatString,
                                      bool utcFlag)
 {
   time_t currentTimeT = time(CM_NULLPTR);
+  std::string source_date_epoch;
+  cmSystemTools::GetEnv("SOURCE_DATE_EPOCH", source_date_epoch);
+  if (!source_date_epoch.empty()) {
+    std::istringstream iss(source_date_epoch);
+    iss >> currentTimeT;
+    if (iss.fail() || !iss.eof()) {
+      cmSystemTools::Error("Cannot parse SOURCE_DATE_EPOCH as integer");
+      exit(27);
+    }
+  }
   if (currentTimeT == time_t(-1)) {
     return std::string();
   }
@@ -82,7 +93,7 @@ time_t cmTimestamp::CreateUtcTimeTFromTm(struct tm& tm) const
 #else
   // From Linux timegm() manpage.
 
-  std::string tz_old = "";
+  std::string tz_old;
   cmSystemTools::GetEnv("TZ", tz_old);
   tz_old = "TZ=" + tz_old;
 
@@ -125,6 +136,7 @@ std::string cmTimestamp::AddTimestampComponent(char flag,
     case 'w':
     case 'y':
     case 'Y':
+    case '%':
       break;
     case 's': // Seconds since UNIX epoch (midnight 1-jan-1970)
     {

@@ -40,7 +40,7 @@ cmCursesMainForm::cmCursesMainForm(std::vector<std::string> const& args,
     "Welcome to ccmake, curses based user interface for CMake.");
   this->HelpMessage.push_back("");
   this->HelpMessage.push_back(s_ConstHelpMessage);
-  this->CMakeInstance = new cmake;
+  this->CMakeInstance = new cmake(cmake::RoleProject);
   this->CMakeInstance->SetCMakeEditCommand(
     cmSystemTools::GetCMakeCursesCommand());
 
@@ -576,8 +576,7 @@ int cmCursesMainForm::Configure(int noconfigure)
   }
   this->CMakeInstance->SetProgressCallback(CM_NULLPTR, CM_NULLPTR);
 
-  keypad(stdscr, TRUE); /* Use key symbols as
-                           KEY_DOWN*/
+  keypad(stdscr, true); /* Use key symbols as KEY_DOWN */
 
   if (retVal != 0 || !this->Errors.empty()) {
     // see if there was an error
@@ -630,8 +629,7 @@ int cmCursesMainForm::Generate()
   int retVal = this->CMakeInstance->Generate();
 
   this->CMakeInstance->SetProgressCallback(CM_NULLPTR, CM_NULLPTR);
-  keypad(stdscr, TRUE); /* Use key symbols as
-                           KEY_DOWN*/
+  keypad(stdscr, true); /* Use key symbols as KEY_DOWN */
 
   if (retVal != 0 || !this->Errors.empty()) {
     // see if there was an error
@@ -766,9 +764,8 @@ void cmCursesMainForm::HandleInput()
       // quit
       if (key == 'q') {
         break;
-      } else {
-        continue;
       }
+      continue;
     }
 
     currentField = current_field(this->Form);
@@ -828,7 +825,7 @@ void cmCursesMainForm::HandleInput()
       // (index always corresponds to the value field)
       // scroll down with arrow down, ctrl+n (emacs binding), or j (vim
       // binding)
-      else if (key == KEY_DOWN || key == ctrl('n') || key == 'j') {
+      if (key == KEY_DOWN || key == ctrl('n') || key == 'j') {
         FIELD* cur = current_field(this->Form);
         size_t findex = field_index(cur);
         if (findex == 3 * this->NumberOfVisibleEntries - 1) {
@@ -1053,7 +1050,7 @@ void cmCursesMainForm::JumpToCacheEntry(const char* astr)
         const char* curField = lbl->GetValue();
         if (curField) {
           std::string cfld = cmSystemTools::LowerCase(curField);
-          if (cfld.find(str) != cfld.npos && findex != start_index) {
+          if (cfld.find(str) != std::string::npos && findex != start_index) {
             break;
           }
         }
