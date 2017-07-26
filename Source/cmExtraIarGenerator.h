@@ -247,6 +247,7 @@ private:
     std::vector<std::string> sources;
 
     void CreateProjectFile();
+    void CreateDebuggerFile();
   };
 
   struct Workspace
@@ -264,15 +265,15 @@ private:
 
     void CreateWorkspaceFile();
 
-    void CreateDebuggerFile();
+    //void CreateDebuggerFile();
   };
 
   struct GlobalCmakeCfg
   {
-    std::string buildType;
-    std::string iarCCompilerFlags;
-    std::string iarCxxCompilerFlags;
-    std::string iarLinkerFlags;
+    std::string buildType           ;
+    std::string iarCCompilerFlags   ;
+    std::string iarCxxCompilerFlags ;
+    std::string iarLinkerFlags      ;
     std::string iarArmPath          ;
     std::string compilerDlibConfig  ;
     std::string compilerPathExe     ;
@@ -282,15 +283,16 @@ private:
     std::string dbgCspyFlashLoaderv3;
     std::string dbgCspyMacfile      ;
     std::string dbgCspyMemfile      ;
+    std::string dbgProbeSelection   ;
     std::string dbgIjetProbeconfig  ;
     std::string dbgLogFile          ;
     std::string linkerEntryRoutine  ;
     std::string linkerIcfFile       ;
     std::string tgtArch             ;
-    std::string wbVersion;
-    std::string chipSelection;
-    std::string rtos;
-    std::string compilerPreInclude;
+    std::string wbVersion           ;
+    std::string chipSelection       ;
+    std::string rtos                ;
+    std::string compilerPreInclude  ;
   };
 
   Workspace workspace;

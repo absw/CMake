@@ -552,6 +552,8 @@ void cmExtraIarGenerator::Generate()
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_CSPY_MEMFILE");
   GLOBALCFG.dbgIjetProbeconfig =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_IJET_PROBECONFIG");
+  GLOBALCFG.dbgProbeSelection =
+      globalMakefile->GetSafeDefinition("IAR_DEBUGGER_PROBE");
   GLOBALCFG.dbgLogFile =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_LOGFILE");
   GLOBALCFG.linkerEntryRoutine =
@@ -1556,6 +1558,11 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   fwrite(output.c_str(), output.length(), 1, pFile);
 
   fclose(pFile);
+
+  if (!this->isLib)
+  {
+      this->CreateDebuggerFile();
+  }
 }
 
 //----------------------------------------------------------------------------
@@ -1565,9 +1572,9 @@ void cmExtraIarGenerator::RegisterProject(const std::string& projectName)
 }
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::Workspace::CreateDebuggerFile()
+void cmExtraIarGenerator::Project::CreateDebuggerFile()
 {
-  std::string debuggerFileName = this->workspaceDir;
+  std::string debuggerFileName = this->binaryDir;
   debuggerFileName += std::string("/") + this->name + ".ewd";
 
   XmlNode root = XmlNode("project");
@@ -1613,7 +1620,21 @@ void cmExtraIarGenerator::Workspace::CreateDebuggerFile()
     cspyData->NewOption("OCDownloadSuppressDownload")->NewState("0");
     cspyData->NewOption("OCDownloadVerifyAll")->NewState("1");
     cspyData->NewOption("OCProductVersion")->NewState(GLOBALCFG.wbVersion);
-    cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
+
+    if (GLOBALCFG.dbgProbeSelection == "J-Link")
+    {
+        cspyData->NewOption("OCDynDriverList")->NewState("JLINK_ID");
+    }
+    else if (GLOBALCFG.dbgProbeSelection == "I-Jet")
+    {
+        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
+    }
+    else
+    {
+        // I-Jet is the default probe.
+        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
+    }
+
     cspyData->NewOption("OCLastSavedByProductVersion")
             ->NewState(GLOBALCFG.wbVersion);
     cspyData->NewOption("OCDownloadAttachToProgram")->NewState("0");
@@ -2163,7 +2184,7 @@ void cmExtraIarGenerator::Workspace::CreateWorkspaceFile()
   fclose(pFile);
   fclose(pBatFile);
 
-  this->CreateDebuggerFile();
+  //this->CreateDebuggerFile();
 }
 
 //----------------------------------------------------------------------------
