@@ -19,6 +19,7 @@
 #include "cmSourceFile.h"
 #include "cmSystemTools.h"
 #include <stdlib.h>
+#include <cstdlib>
 #include <assert.h>
 #include "cmExtraIarGenerator.h"
 #include "cmGlobalGenerator.h"
@@ -211,6 +212,30 @@ const char* XmlNode::LEVELS[] =
         "\t\t\t\t\t\t\t\t\t",
         "\t\t\t\t\t\t\t\t\t\t"
     };
+
+const char* RUNTIME_LIBRARY_CONFIG[] =
+    {
+        "None"  , // 0
+        "Normal", // 1
+        "Full"  , // 2
+        "Custom"  // 3
+    };
+
+
+const char* SCANF_PRINTF_FORMATTING[] =
+    {
+        "Auto"  , // 0
+        "Full", // 1
+        "Full without multibytes"  , // 2
+        "Large", // 3
+        "Large without multibytes"  , // 4
+        "Small", // 5
+        "Small without multibytes"  , // 6
+        "Tiny"  // 7
+    };
+
+const int SCANF_FORMATTING_CNT = 7;
+const int PRINTF_FORMATTING_CNT = 8;
 
 
 class FileTreeNode
@@ -537,6 +562,36 @@ void cmExtraIarGenerator::Generate()
   GLOBALCFG.iarArmPath = globalMakefile->GetSafeDefinition("IAR_ARM_PATH");
   GLOBALCFG.compilerDlibConfig =
       globalMakefile->GetSafeDefinition("IAR_COMPILER_DLIB_CONFIG");
+
+  for (int i = 0; i < 4; i++)
+  {
+      if (std::string(RUNTIME_LIBRARY_CONFIG[i]) == GLOBALCFG.compilerDlibConfig)
+      {
+          GLOBALCFG.compilerDlibConfigId = i;
+      }
+  }
+
+  GLOBALCFG.bufferedTermOut = globalMakefile->GetSafeDefinition("IAR_GENERAL_BUFFERED_TERMINAL_OUTPUT");
+  GLOBALCFG.scanfFmt = globalMakefile->GetSafeDefinition("IAR_GENERAL_SCANF_FORMATTER");
+  GLOBALCFG.printfFmt = globalMakefile->GetSafeDefinition("IAR_GENERAL_PRINTF_FORMATTER");
+  GLOBALCFG.semihostingEnabled = globalMakefile->GetSafeDefinition("IAR_SEMIHOSTING_ENABLE");
+
+  for (int i = 0; i < SCANF_FORMATTING_CNT; i++)
+  {
+      if (std::string(SCANF_PRINTF_FORMATTING[i]) == GLOBALCFG.scanfFmt)
+      {
+          GLOBALCFG.scanfFmtId = i;
+      }
+  }
+
+  for (int i = 0; i < PRINTF_FORMATTING_CNT; i++)
+  {
+      if (std::string(SCANF_PRINTF_FORMATTING[i]) == GLOBALCFG.printfFmt)
+      {
+          GLOBALCFG.printfFmtId = i;
+      }
+  }
+
   GLOBALCFG.compilerPathExe =
       globalMakefile->GetSafeDefinition("IAR_COMPILER_PATH_EXE");
   GLOBALCFG.cpuName = globalMakefile->GetSafeDefinition("IAR_CPU_NAME");
@@ -1228,20 +1283,29 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir + "/" + this->name);
   generalData->NewOption("Variant", 20)->NewState("42");
   generalData->NewOption("GEndianMode")->NewState("0");
-  generalData->NewOption("Input variant", 3)->NewState("7");
+
+
+  std::string pPrintfIdStr = int2str(GLOBALCFG.printfFmtId);
+  std::string pScanfIdStr = int2str(GLOBALCFG.scanfFmtId);
+
+  generalData->NewOption("Input variant", 3)->NewState(pPrintfIdStr);
   generalData->NewOption("Input description")
               ->NewState("No specifier n, no float nor "
                   "long long, no scan set,"
                   " no assignment suppressing, without multibyte support.");
-  generalData->NewOption("Output variant", 2)->NewState("4");
+  generalData->NewOption("Output variant", 2)->NewState(pScanfIdStr);
   generalData->NewOption("Output description")
                 ->NewState("No specifier a, A, without multibyte support.");
   generalData->NewOption("GOutputBinary")
                 ->NewState(this->isLib ? "1" : "0");
   generalData->NewOption("FPU", 2)->NewState("3");
   generalData->NewOption("OGCoreOrChip")->NewState("1");
-  generalData->NewOption("GRuntimeLibSelect", 0)->NewState("1");
-  generalData->NewOption("GRuntimeLibSelectSlave", 0)->NewState("1");
+
+
+  std::string pDlibIdStr = int2str(GLOBALCFG.compilerDlibConfigId);
+
+  generalData->NewOption("GRuntimeLibSelect", 0)->NewState(std::string(pDlibIdStr));
+  generalData->NewOption("GRuntimeLibSelectSlave", 0)->NewState(std::string(pDlibIdStr));
   generalData->NewOption("RTDescription")
               ->NewState("Use the normal configuration of the C/C++ runtime"
                   " library. No locale interface, C locale, no file descriptor"
@@ -1257,10 +1321,17 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   chipSelection += "\t" + cmExtraIarGenerator::GLOBALCFG.chipSelection;
 
   generalData->NewOption("OGChipSelectEditMenu")->NewState(chipSelection);
+
+
+  const char* pGenLowLevelIfaceStr = GLOBALCFG.semihostingEnabled == "ON" ? "1" : "0";
+
   generalData->NewOption("GenLowLevelInterface")
-                ->NewState(this->buildCfg.isDebug ? "1" : "0");
+                ->NewState(pGenLowLevelIfaceStr);
   generalData->NewOption("GEndianModeBE")->NewState("1");
-  generalData->NewOption("OGBufferedTerminalOutput")->NewState("0");
+
+  const char* pBufferedStr = GLOBALCFG.bufferedTermOut == "ON" ? "1" : "0";
+
+  generalData->NewOption("OGBufferedTerminalOutput")->NewState(pBufferedStr);
   generalData->NewOption("GenStdoutInterface")->NewState("0");
   generalData->NewOption("GeneralMisraRules98", 0)
                 ->NewState("100011111011010110111001110011111110111001101100010111011"

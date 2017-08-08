@@ -276,6 +276,7 @@ private:
     std::string iarLinkerFlags      ;
     std::string iarArmPath          ;
     std::string compilerDlibConfig  ;
+    int compilerDlibConfigId;
     std::string compilerPathExe     ;
     std::string cpuName             ;
     std::string systemName          ;
@@ -293,6 +294,12 @@ private:
     std::string chipSelection       ;
     std::string rtos                ;
     std::string compilerPreInclude  ;
+    std::string scanfFmt  ;
+    std::string printfFmt  ;
+    int scanfFmtId  ;
+    int printfFmtId  ;
+    std::string bufferedTermOut;
+    std::string semihostingEnabled;
   };
 
   Workspace workspace;
