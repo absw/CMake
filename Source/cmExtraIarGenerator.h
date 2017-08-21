@@ -247,6 +247,7 @@ private:
     std::vector<std::string> sources;
 
     void CreateProjectFile();
+    void CreateDebuggerFile();
   };
 
   struct Workspace
@@ -264,17 +265,19 @@ private:
 
     void CreateWorkspaceFile();
 
-    void CreateDebuggerFile();
+    //void CreateDebuggerFile();
   };
 
   struct GlobalCmakeCfg
   {
+<<<<<<< HEAD
     std::string buildType;
     std::string iarCCompilerFlags;
     std::string iarCxxCompilerFlags;
     std::string iarLinkerFlags;
     std::string iarArmPath;
     std::string compilerDlibConfig;
+    int compilerDlibConfigId;
     std::string compilerPathExe;
     std::string cpuName;
     std::string systemName;
@@ -299,6 +302,12 @@ private:
     std::string CCDiagWarnAreErr;
     std::string CCOptLevel;
     std::string CCOptLevelSlave;
+    std::string scanfFmt;
+    std::string printfFmt;
+    int scanfFmtId;
+    int printfFmtId;
+    std::string bufferedTermOut;
+    std::string semihostingEnabled;
   };
 
   Workspace workspace;

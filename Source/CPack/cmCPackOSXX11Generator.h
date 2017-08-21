@@ -3,7 +3,8 @@
 #ifndef cmCPackOSXX11Generator_h
 #define cmCPackOSXX11Generator_h
 
-#include <cmConfigure.h>
+#include "cmConfigure.h"
+
 #include <string>
 
 #include "cmCPackGenerator.h"
@@ -22,7 +23,7 @@ public:
    * Construct generator
    */
   cmCPackOSXX11Generator();
-  virtual ~cmCPackOSXX11Generator();
+  ~cmCPackOSXX11Generator() CM_OVERRIDE;
 
 protected:
   virtual int InitializeInternal() CM_OVERRIDE;

@@ -8,9 +8,9 @@
 #include "cmGeneratedFileStream.h"
 #include "cmSystemTools.h"
 
+#include "cmsys/Directory.hxx"
+#include "cmsys/RegularExpression.hxx"
 #include <algorithm>
-#include <cmsys/Directory.hxx>
-#include <cmsys/RegularExpression.hxx>
 #include <map>
 #include <sstream>
 #include <stdlib.h>
@@ -76,7 +76,7 @@ int cmCPackNSISGenerator::PackageFiles()
       }
 
       // Strip off the component part of the path.
-      fileN = fileN.substr(pos + 1, std::string::npos);
+      fileN = fileN.substr(pos + 1);
     }
     std::replace(fileN.begin(), fileN.end(), '/', '\\');
 
@@ -106,7 +106,7 @@ int cmCPackNSISGenerator::PackageFiles()
         componentName = fileN.substr(0, slash);
 
         // Strip off the component part of the path.
-        fileN = fileN.substr(slash + 1, std::string::npos);
+        fileN = fileN.substr(slash + 1);
       }
     }
     std::replace(fileN.begin(), fileN.end(), '/', '\\');
@@ -597,13 +597,11 @@ bool cmCPackNSISGenerator::GetListOfSubdirectories(
 {
   cmsys::Directory dir;
   dir.Load(topdir);
-  size_t fileNum;
-  for (fileNum = 0; fileNum < dir.GetNumberOfFiles(); ++fileNum) {
-    if (strcmp(dir.GetFile(static_cast<unsigned long>(fileNum)), ".") &&
-        strcmp(dir.GetFile(static_cast<unsigned long>(fileNum)), "..")) {
-      std::string fullPath = topdir;
-      fullPath += "/";
-      fullPath += dir.GetFile(static_cast<unsigned long>(fileNum));
+  for (unsigned long i = 0; i < dir.GetNumberOfFiles(); ++i) {
+    const char* fileName = dir.GetFile(i);
+    if (strcmp(fileName, ".") != 0 && strcmp(fileName, "..") != 0) {
+      std::string const fullPath =
+        std::string(topdir).append("/").append(fileName);
       if (cmsys::SystemTools::FileIsDirectory(fullPath) &&
           !cmsys::SystemTools::FileIsSymlink(fullPath)) {
         if (!this->GetListOfSubdirectories(fullPath.c_str(), dirs)) {

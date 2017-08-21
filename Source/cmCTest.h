@@ -3,10 +3,10 @@
 #ifndef cmCTest_h
 #define cmCTest_h
 
-#include <cmConfigure.h>
+#include "cmConfigure.h"
 
-#include <cmProcessOutput.h>
-#include <cmsys/String.hxx>
+#include "cmProcessOutput.h"
+#include "cmsys/String.hxx"
 #include <map>
 #include <set>
 #include <sstream>
@@ -14,28 +14,11 @@
 #include <time.h>
 #include <vector>
 
-class cmCTest;
 class cmCTestGenericHandler;
 class cmCTestStartCommand;
 class cmGeneratedFileStream;
 class cmMakefile;
 class cmXMLWriter;
-
-#define cmCTestLog(ctSelf, logType, msg)                                      \
-  do {                                                                        \
-    std::ostringstream cmCTestLog_msg;                                        \
-    cmCTestLog_msg << msg;                                                    \
-    (ctSelf)->Log(cmCTest::logType, __FILE__, __LINE__,                       \
-                  cmCTestLog_msg.str().c_str());                              \
-  } while (0)
-
-#define cmCTestOptionalLog(ctSelf, logType, msg, suppress)                    \
-  do {                                                                        \
-    std::ostringstream cmCTestLog_msg;                                        \
-    cmCTestLog_msg << msg;                                                    \
-    (ctSelf)->Log(cmCTest::logType, __FILE__, __LINE__,                       \
-                  cmCTestLog_msg.str().c_str(), suppress);                    \
-  } while (0)
 
 /** \class cmCTest
  * \brief Represents a ctest invocation.
@@ -242,7 +225,7 @@ public:
 
   /** Used for parallel ctest job scheduling */
   std::string GetScheduleType() { return this->ScheduleType; }
-  void SetScheduleType(std::string type) { this->ScheduleType = type; }
+  void SetScheduleType(std::string const& type) { this->ScheduleType = type; }
 
   /** The max output width */
   int GetMaxTestNameWidth() const;
@@ -455,7 +438,9 @@ public:
     this->StreamErr = err;
   }
   void AddSiteProperties(cmXMLWriter& xml);
+
   bool GetLabelSummary() { return this->LabelSummary; }
+  bool GetSubprojectSummary() { return this->SubprojectSummary; }
 
   std::string GetCostDataFile();
 
@@ -470,6 +455,9 @@ public:
   /** Return true if test should run until fail */
   bool GetRepeatUntilFail() { return this->RepeatUntilFail; }
 
+  void GenerateSubprojectsOutput(cmXMLWriter& xml);
+  std::vector<std::string> GetLabelsForSubprojects();
+
 private:
   int RepeatTests;
   bool RepeatUntilFail;
@@ -481,6 +469,7 @@ private:
   bool ExtraVerbose;
   bool ProduceXML;
   bool LabelSummary;
+  bool SubprojectSummary;
   bool UseHTTP10;
   bool PrintLabels;
   bool Failover;
@@ -647,5 +636,21 @@ inline std::ostream& operator<<(std::ostream& os, const cmCTestLogWrite& c)
   os.flush();
   return os;
 }
+
+#define cmCTestLog(ctSelf, logType, msg)                                      \
+  do {                                                                        \
+    std::ostringstream cmCTestLog_msg;                                        \
+    cmCTestLog_msg << msg;                                                    \
+    (ctSelf)->Log(cmCTest::logType, __FILE__, __LINE__,                       \
+                  cmCTestLog_msg.str().c_str());                              \
+  } while (false)
+
+#define cmCTestOptionalLog(ctSelf, logType, msg, suppress)                    \
+  do {                                                                        \
+    std::ostringstream cmCTestLog_msg;                                        \
+    cmCTestLog_msg << msg;                                                    \
+    (ctSelf)->Log(cmCTest::logType, __FILE__, __LINE__,                       \
+                  cmCTestLog_msg.str().c_str(), suppress);                    \
+  } while (false)
 
 #endif

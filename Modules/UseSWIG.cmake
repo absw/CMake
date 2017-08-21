@@ -82,10 +82,6 @@ macro(SWIG_MODULE_INITIALIZE name language)
     set(SWIG_MODULE_${name}_REAL_NAME "_${name}")
   elseif("x${SWIG_MODULE_${name}_LANGUAGE}" STREQUAL "xPERL")
     set(SWIG_MODULE_${name}_EXTRA_FLAGS "-shadow")
-  elseif("x${SWIG_MODULE_${name}_LANGUAGE}" STREQUAL "xCSHARP")
-    # This makes sure that the name used in the generated DllImport
-    # matches the library name created by CMake
-    set(SWIG_MODULE_${name}_EXTRA_FLAGS "-dllimport;${name}")
   endif()
 endmacro()
 
@@ -192,6 +188,13 @@ macro(SWIG_ADD_SOURCE_TO_MODULE name outfiles infile)
   if(swig_source_file_cplusplus)
     set(swig_special_flags ${swig_special_flags} "-c++")
   endif()
+  if("x${SWIG_MODULE_${name}_LANGUAGE}" STREQUAL "xCSHARP")
+    if(NOT ";${swig_source_file_flags};${CMAKE_SWIG_FLAGS};" MATCHES ";-dllimport;")
+      # This makes sure that the name used in the generated DllImport
+      # matches the library name created by CMake
+      set(SWIG_MODULE_${name}_EXTRA_FLAGS "-dllimport;${name}")
+    endif()
+  endif()
   set(swig_extra_flags)
   if(SWIG_MODULE_${name}_EXTRA_FLAGS)
     set(swig_extra_flags ${swig_extra_flags} ${SWIG_MODULE_${name}_EXTRA_FLAGS})
@@ -212,6 +215,7 @@ macro(SWIG_ADD_SOURCE_TO_MODULE name outfiles infile)
     "${swig_source_file_fullname}"
     MAIN_DEPENDENCY "${swig_source_file_fullname}"
     DEPENDS ${SWIG_MODULE_${name}_EXTRA_DEPS}
+    IMPLICIT_DEPENDS CXX "${swig_source_file_fullname}"
     COMMENT "Swig source")
   set_source_files_properties("${swig_generated_file_fullname}" ${swig_extra_generated_files}
     PROPERTIES GENERATED 1)
@@ -231,8 +235,6 @@ endmacro()
 
 
 macro(SWIG_ADD_LIBRARY name)
-
-  include(CMakeParseArguments)
   set(options "")
   set(oneValueArgs LANGUAGE
                    TYPE)
@@ -327,6 +329,9 @@ macro(SWIG_ADD_LIBRARY name)
     if (APPLE)
       set_target_properties (${SWIG_MODULE_${name}_REAL_NAME} PROPERTIES SUFFIX ".bundle")
     endif ()
+  else()
+    # assume empty prefix because we expect the module to be dynamically loaded
+    set_target_properties (${SWIG_MODULE_${name}_REAL_NAME} PROPERTIES PREFIX "")
   endif ()
 endmacro()
 
@@ -340,4 +345,3 @@ macro(SWIG_LINK_LIBRARIES name)
     message(SEND_ERROR "Cannot find Swig library \"${name}\".")
   endif()
 endmacro()
-

@@ -3,7 +3,8 @@
 #ifndef cmCPackDragNDropGenerator_h
 #define cmCPackDragNDropGenerator_h
 
-#include <cmConfigure.h>
+#include "cmConfigure.h"
+
 #include <sstream>
 #include <stddef.h>
 #include <string>
@@ -22,7 +23,7 @@ public:
   cmCPackTypeMacro(cmCPackDragNDropGenerator, cmCPackGenerator);
 
   cmCPackDragNDropGenerator();
-  virtual ~cmCPackDragNDropGenerator();
+  ~cmCPackDragNDropGenerator() CM_OVERRIDE;
 
 protected:
   int InitializeInternal() CM_OVERRIDE;
@@ -38,8 +39,6 @@ protected:
     const std::string& componentName) CM_OVERRIDE;
 
   int CreateDMG(const std::string& src_dir, const std::string& output_file);
-
-  std::string InstallPrefix;
 
 private:
   std::string slaDirectory;

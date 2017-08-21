@@ -20,6 +20,7 @@
 #include "cmState.h"
 #include "cmSystemTools.h"
 #include <stdlib.h>
+#include <cstdlib>
 #include <assert.h>
 #include "cmExtraIarGenerator.h"
 #include "cmGlobalGenerator.h"
@@ -212,6 +213,30 @@ const char* XmlNode::LEVELS[] =
         "\t\t\t\t\t\t\t\t\t",
         "\t\t\t\t\t\t\t\t\t\t"
     };
+
+const char* RUNTIME_LIBRARY_CONFIG[] =
+    {
+        "None"  , // 0
+        "Normal", // 1
+        "Full"  , // 2
+        "Custom"  // 3
+    };
+
+
+const char* SCANF_PRINTF_FORMATTING[] =
+    {
+        "Auto"  , // 0
+        "Full", // 1
+        "Full without multibytes"  , // 2
+        "Large", // 3
+        "Large without multibytes"  , // 4
+        "Small", // 5
+        "Small without multibytes"  , // 6
+        "Tiny"  // 7
+    };
+
+const int SCANF_FORMATTING_CNT = 7;
+const int PRINTF_FORMATTING_CNT = 8;
 
 
 class FileTreeNode
@@ -538,6 +563,36 @@ void cmExtraIarGenerator::Generate()
   GLOBALCFG.iarArmPath = globalMakefile->GetSafeDefinition("IAR_ARM_PATH");
   GLOBALCFG.compilerDlibConfig =
       globalMakefile->GetSafeDefinition("IAR_COMPILER_DLIB_CONFIG");
+
+  for (int i = 0; i < 4; i++)
+  {
+      if (std::string(RUNTIME_LIBRARY_CONFIG[i]) == GLOBALCFG.compilerDlibConfig)
+      {
+          GLOBALCFG.compilerDlibConfigId = i;
+      }
+  }
+
+  GLOBALCFG.bufferedTermOut = globalMakefile->GetSafeDefinition("IAR_GENERAL_BUFFERED_TERMINAL_OUTPUT");
+  GLOBALCFG.scanfFmt = globalMakefile->GetSafeDefinition("IAR_GENERAL_SCANF_FORMATTER");
+  GLOBALCFG.printfFmt = globalMakefile->GetSafeDefinition("IAR_GENERAL_PRINTF_FORMATTER");
+  GLOBALCFG.semihostingEnabled = globalMakefile->GetSafeDefinition("IAR_SEMIHOSTING_ENABLE");
+
+  for (int i = 0; i < SCANF_FORMATTING_CNT; i++)
+  {
+      if (std::string(SCANF_PRINTF_FORMATTING[i]) == GLOBALCFG.scanfFmt)
+      {
+          GLOBALCFG.scanfFmtId = i;
+      }
+  }
+
+  for (int i = 0; i < PRINTF_FORMATTING_CNT; i++)
+  {
+      if (std::string(SCANF_PRINTF_FORMATTING[i]) == GLOBALCFG.printfFmt)
+      {
+          GLOBALCFG.printfFmtId = i;
+      }
+  }
+
   GLOBALCFG.compilerPathExe =
       globalMakefile->GetSafeDefinition("IAR_COMPILER_PATH_EXE");
   GLOBALCFG.cpuName = globalMakefile->GetSafeDefinition("IAR_CPU_NAME");
@@ -553,6 +608,8 @@ void cmExtraIarGenerator::Generate()
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_CSPY_MEMFILE");
   GLOBALCFG.dbgIjetProbeconfig =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_IJET_PROBECONFIG");
+  GLOBALCFG.dbgProbeSelection =
+      globalMakefile->GetSafeDefinition("IAR_DEBUGGER_PROBE");
   GLOBALCFG.dbgLogFile =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_LOGFILE");
   GLOBALCFG.linkerEntryRoutine =
@@ -1160,6 +1217,9 @@ void cmExtraIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
     buildCfg.compilerOpts.push_back(*it);
     }
 
+  std::string importedLocationStr = std::string("IMPORTED_LOCATION_")
+                  + cmSystemTools::UpperCase(GLOBALCFG.buildType);
+
   // Libraries:
   const cmTarget::LinkLibraryVectorType& libs =
       tgt.GetOriginalLinkLibraries();
@@ -1172,8 +1232,18 @@ void cmExtraIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
       {
       if (it->first == (*it2)->GetName())
         {
-          buildCfg.libraries
-          .push_back((*it2)->GetProperty(std::string("IMPORTED_LOCATION_")+cmSystemTools::UpperCase(GLOBALCFG.buildType)));
+          const char* pPropertyStr = (*it2)->GetProperty(importedLocationStr);
+          const char* pNoBtPropertyStr = (*it2)->GetProperty(std::string("IMPORTED_LOCATION"));
+
+          if (pPropertyStr != NULL)
+          {
+              buildCfg.libraries.push_back(pPropertyStr);
+          }
+          else if (pNoBtPropertyStr != NULL)
+          {
+              buildCfg.libraries.push_back(pNoBtPropertyStr);
+          }
+
           found = true;
           break;
         }
@@ -1238,8 +1308,12 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   generalData->NewOption("GOutputBinary")
                 ->NewState(this->isLib ? "1" : "0");
   generalData->NewOption("OGCoreOrChip")->NewState("1");
-  generalData->NewOption("GRuntimeLibSelect", 0)->NewState("1");
-  generalData->NewOption("GRuntimeLibSelectSlave", 0)->NewState("1");
+
+
+  std::string pDlibIdStr = int2str(GLOBALCFG.compilerDlibConfigId);
+
+  generalData->NewOption("GRuntimeLibSelect", 0)->NewState(std::string(pDlibIdStr));
+  generalData->NewOption("GRuntimeLibSelectSlave", 0)->NewState(std::string(pDlibIdStr));
   generalData->NewOption("RTDescription")
               ->NewState("Use the normal configuration of the C/C++ runtime"
                   " library. No locale interface, C locale, no file descriptor"
@@ -1255,10 +1329,21 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   chipSelection += "\t" + cmExtraIarGenerator::GLOBALCFG.chipSelection;
 
   generalData->NewOption("OGChipSelectEditMenu")->NewState(chipSelection);
+
+
+  const char* pGenLowLevelIfaceStr = GLOBALCFG.semihostingEnabled == "ON" ? "1" : "0";
+
   generalData->NewOption("GenLowLevelInterface")
+<<<<<<< HEAD
 	  ->NewState(cmSystemTools::IsOn(GLOBALCFG.genLowLevelInterface.c_str()) ? "1" : "0");
+=======
+                ->NewState(pGenLowLevelIfaceStr);
+>>>>>>> korbel/iarplugin
   generalData->NewOption("GEndianModeBE")->NewState("1");
-  generalData->NewOption("OGBufferedTerminalOutput")->NewState("0");
+
+  const char* pBufferedStr = GLOBALCFG.bufferedTermOut == "ON" ? "1" : "0";
+
+  generalData->NewOption("OGBufferedTerminalOutput")->NewState(pBufferedStr);
   generalData->NewOption("GenStdoutInterface")->NewState("0");
   generalData->NewOption("GeneralMisraRules98", 0)
                 ->NewState("100011111011010110111001110011111110111001101100010111011"
@@ -1571,6 +1656,11 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   fwrite(output.c_str(), output.length(), 1, pFile);
 
   fclose(pFile);
+
+  if (!this->isLib)
+  {
+      this->CreateDebuggerFile();
+  }
 }
 
 //----------------------------------------------------------------------------
@@ -1580,9 +1670,9 @@ void cmExtraIarGenerator::RegisterProject(const std::string& projectName)
 }
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::Workspace::CreateDebuggerFile()
+void cmExtraIarGenerator::Project::CreateDebuggerFile()
 {
-  std::string debuggerFileName = this->workspaceDir;
+  std::string debuggerFileName = this->binaryDir;
   debuggerFileName += std::string("/") + this->name + ".ewd";
 
   XmlNode root = XmlNode("project");
@@ -1628,7 +1718,21 @@ void cmExtraIarGenerator::Workspace::CreateDebuggerFile()
     cspyData->NewOption("OCDownloadSuppressDownload")->NewState("0");
     cspyData->NewOption("OCDownloadVerifyAll")->NewState("1");
     cspyData->NewOption("OCProductVersion")->NewState(GLOBALCFG.wbVersion);
-    cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
+
+    if (GLOBALCFG.dbgProbeSelection == "J-Link")
+    {
+        cspyData->NewOption("OCDynDriverList")->NewState("JLINK_ID");
+    }
+    else if (GLOBALCFG.dbgProbeSelection == "I-Jet")
+    {
+        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
+    }
+    else
+    {
+        // I-Jet is the default probe.
+        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
+    }
+
     cspyData->NewOption("OCLastSavedByProductVersion")
             ->NewState(GLOBALCFG.wbVersion);
     cspyData->NewOption("OCDownloadAttachToProgram")->NewState("0");
@@ -2178,7 +2282,7 @@ void cmExtraIarGenerator::Workspace::CreateWorkspaceFile()
   fclose(pFile);
   fclose(pBatFile);
 
-  this->CreateDebuggerFile();
+  //this->CreateDebuggerFile();
 }
 
 //----------------------------------------------------------------------------

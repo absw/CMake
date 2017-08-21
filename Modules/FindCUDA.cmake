@@ -67,6 +67,13 @@
 #   -- Set to ON for Emulation mode. -D_DEVICEEMU is defined for CUDA C files
 #      when CUDA_BUILD_EMULATION is TRUE.
 #
+#   CUDA_LINK_LIBRARIES_KEYWORD (Default "")
+#    -- The <PRIVATE|PUBLIC|INTERFACE> keyword to use for internal
+#       target_link_libraries calls. The default is to use no keyword which
+#       uses the old "plain" form of target_link_libraries. Note that is matters
+#       because whatever is used inside the FindCUDA module must also be used
+#       outside - the two forms of target_link_libraries cannot be mixed.
+#
 #   CUDA_GENERATED_OUTPUT_DIR (Default CMAKE_CURRENT_BINARY_DIR)
 #   -- Set to the path you wish to have the generated files placed.  If it is
 #      blank output files will be placed in CMAKE_CURRENT_BINARY_DIR.
@@ -672,7 +679,11 @@ if(CMAKE_CROSSCOMPILING)
   # add known CUDA targetr root path to the set of directories we search for programs, libraries and headers
   set( CMAKE_FIND_ROOT_PATH "${CUDA_TOOLKIT_TARGET_DIR};${CMAKE_FIND_ROOT_PATH}")
   macro( cuda_find_host_program )
-    find_host_program( ${ARGN} )
+    if (COMMAND find_host_program)
+      find_host_program( ${ARGN} )
+    else()
+      find_program( ${ARGN} )
+    endif()
   endmacro()
 else()
   # for non-cross-compile, find_host_program == find_program and CUDA_TOOLKIT_TARGET_DIR == CUDA_TOOLKIT_ROOT_DIR
@@ -1691,6 +1702,7 @@ function(CUDA_LINK_SEPARABLE_COMPILATION_OBJECTS output_file cuda_target options
         COMMAND ${CUDA_NVCC_EXECUTABLE} ${nvcc_flags} -dlink ${object_files} -o ${output_file}
         ${flags}
         COMMENT "Building NVCC intermediate link file ${output_file_relative_path}"
+        COMMAND_EXPAND_LISTS
         ${_verbatim}
         )
     else()
@@ -1701,6 +1713,7 @@ function(CUDA_LINK_SEPARABLE_COMPILATION_OBJECTS output_file cuda_target options
         COMMAND ${CMAKE_COMMAND} -E echo "Building NVCC intermediate link file ${output_file_relative_path}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${output_file_dir}"
         COMMAND ${CUDA_NVCC_EXECUTABLE} ${nvcc_flags} ${flags} -dlink ${object_files} -o "${output_file}"
+        COMMAND_EXPAND_LISTS
         ${_verbatim}
         )
     endif()
@@ -1740,12 +1753,12 @@ macro(CUDA_ADD_LIBRARY cuda_target)
   # variable will have been defined.
   CUDA_LINK_SEPARABLE_COMPILATION_OBJECTS("${link_file}" ${cuda_target} "${_options}" "${${cuda_target}_SEPARABLE_COMPILATION_OBJECTS}")
 
-  target_link_libraries(${cuda_target}
+  target_link_libraries(${cuda_target} ${CUDA_LINK_LIBRARIES_KEYWORD}
     ${CUDA_LIBRARIES}
     )
 
   if(CUDA_SEPARABLE_COMPILATION)
-    target_link_libraries(${cuda_target}
+    target_link_libraries(${cuda_target} ${CUDA_LINK_LIBRARIES_KEYWORD}
       ${CUDA_cudadevrt_LIBRARY}
       )
   endif()
@@ -1790,7 +1803,7 @@ macro(CUDA_ADD_EXECUTABLE cuda_target)
   # variable will have been defined.
   CUDA_LINK_SEPARABLE_COMPILATION_OBJECTS("${link_file}" ${cuda_target} "${_options}" "${${cuda_target}_SEPARABLE_COMPILATION_OBJECTS}")
 
-  target_link_libraries(${cuda_target}
+  target_link_libraries(${cuda_target} ${CUDA_LINK_LIBRARIES_KEYWORD}
     ${CUDA_LIBRARIES}
     )
 
@@ -1818,7 +1831,7 @@ macro(cuda_compile_base cuda_target format generated_files)
   else()
     set(_counter 1)
   endif()
-  set(_cuda_target "${_cuda_target}_${_counter}")
+  string(APPEND _cuda_target "_${_counter}")
   set_property(DIRECTORY PROPERTY _cuda_internal_phony_counter ${_counter})
 
   # Separate the sources from the options
@@ -1876,9 +1889,9 @@ endmacro()
 ###############################################################################
 macro(CUDA_ADD_CUFFT_TO_TARGET target)
   if (CUDA_BUILD_EMULATION)
-    target_link_libraries(${target} ${CUDA_cufftemu_LIBRARY})
+    target_link_libraries(${target} ${CUDA_LINK_LIBRARIES_KEYWORD} ${CUDA_cufftemu_LIBRARY})
   else()
-    target_link_libraries(${target} ${CUDA_cufft_LIBRARY})
+    target_link_libraries(${target} ${CUDA_LINK_LIBRARIES_KEYWORD} ${CUDA_cufft_LIBRARY})
   endif()
 endmacro()
 
@@ -1889,9 +1902,9 @@ endmacro()
 ###############################################################################
 macro(CUDA_ADD_CUBLAS_TO_TARGET target)
   if (CUDA_BUILD_EMULATION)
-    target_link_libraries(${target} ${CUDA_cublasemu_LIBRARY})
+    target_link_libraries(${target} ${CUDA_LINK_LIBRARIES_KEYWORD} ${CUDA_cublasemu_LIBRARY})
   else()
-    target_link_libraries(${target} ${CUDA_cublas_LIBRARY} ${CUDA_cublas_device_LIBRARY})
+    target_link_libraries(${target} ${CUDA_LINK_LIBRARIES_KEYWORD} ${CUDA_cublas_LIBRARY} ${CUDA_cublas_device_LIBRARY})
   endif()
 endmacro()
 

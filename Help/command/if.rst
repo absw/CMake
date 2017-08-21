@@ -9,17 +9,17 @@ Conditionally execute a group of commands.
    # then section.
    COMMAND1(ARGS ...)
    COMMAND2(ARGS ...)
-   ...
+   #...
  elseif(expression2)
    # elseif section.
    COMMAND1(ARGS ...)
    COMMAND2(ARGS ...)
-   ...
+   #...
  else(expression)
    # else section.
    COMMAND1(ARGS ...)
    COMMAND2(ARGS ...)
-   ...
+   #...
  endif(expression)
 
 Evaluates the given expression.  If the result is true, the commands
@@ -103,7 +103,8 @@ Possible expressions are:
 
 ``if(<variable|string> MATCHES regex)``
  True if the given string or variable's value matches the given regular
- expression.
+ expression.  See :ref:`Regex Specification` for regex format.
+ ``()`` groups are captured in :variable:`CMAKE_MATCH_<n>` variables.
 
 ``if(<variable|string> LESS <variable|string>)``
  True if the given string or variable's value is a valid number and less

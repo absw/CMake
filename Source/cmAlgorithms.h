@@ -3,10 +3,10 @@
 #ifndef cmAlgorithms_h
 #define cmAlgorithms_h
 
-#include <cmConfigure.h> // IWYU pragma: keep
+#include "cmConfigure.h" // IWYU pragma: keep
 
+#include "cm_kwiml.h"
 #include <algorithm>
-#include <cm_kwiml.h>
 #include <functional>
 #include <iterator>
 #include <sstream>
@@ -99,6 +99,12 @@ FwdIt cmRotate(FwdIt first, FwdIt middle, FwdIt last)
   std::rotate(first, middle, last);
   std::advance(first, dist);
   return first;
+}
+
+template <typename Container, typename Predicate>
+void cmEraseIf(Container& cont, Predicate pred)
+{
+  cont.erase(std::remove_if(cont.begin(), cont.end(), pred), cont.end());
 }
 
 namespace ContainerAlgorithms {
@@ -242,7 +248,7 @@ std::string cmJoin(Range const& r, const char* delimiter)
 }
 
 template <typename Range>
-std::string cmJoin(Range const& r, std::string delimiter)
+std::string cmJoin(Range const& r, std::string const& delimiter)
 {
   return cmJoin(r, delimiter.c_str());
 }
@@ -344,17 +350,18 @@ typename Range::const_iterator cmRemoveDuplicates(Range& r)
 }
 
 template <typename Range>
-std::string cmWrap(std::string prefix, Range const& r, std::string suffix,
-                   std::string sep)
+std::string cmWrap(std::string const& prefix, Range const& r,
+                   std::string const& suffix, std::string const& sep)
 {
   if (r.empty()) {
     return std::string();
   }
-  return prefix + cmJoin(r, (suffix + sep + prefix).c_str()) + suffix;
+  return prefix + cmJoin(r, suffix + sep + prefix) + suffix;
 }
 
 template <typename Range>
-std::string cmWrap(char prefix, Range const& r, char suffix, std::string sep)
+std::string cmWrap(char prefix, Range const& r, char suffix,
+                   std::string const& sep)
 {
   return cmWrap(std::string(1, prefix), r, std::string(1, suffix), sep);
 }

@@ -6,17 +6,18 @@
 #include "cmCPackComponentGroup.h"
 #include "cmCPackGenerator.h"
 #include "cmCPackLog.h"
+#include "cmCryptoHash.h"
 #include "cmGeneratedFileStream.h"
 #include "cmSystemTools.h"
+#include "cm_sys_stat.h"
 
-#include <cmsys/Glob.hxx>
+#include "cmsys/Glob.hxx"
 #include <limits.h>
 #include <map>
 #include <ostream>
 #include <set>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <utility>
 
 // NOTE:
@@ -173,7 +174,11 @@ int cmCPackDebGenerator::PackageComponentsAllInOne(
     std::string(this->GetOption("CPACK_PACKAGE_FILE_NAME")) +
     this->GetOutputExtension());
   // all GROUP in one vs all COMPONENT in one
-  localToplevel += "/" + compInstDirName;
+  // if must be here otherwise non component paths have a trailing / while
+  // components don't
+  if (!compInstDirName.empty()) {
+    localToplevel += "/" + compInstDirName;
+  }
 
   /* replace the TEMP DIRECTORY with the component one */
   this->SetOption("CPACK_TEMPORARY_DIRECTORY", localToplevel.c_str());
@@ -475,6 +480,25 @@ int cmCPackDebGenerator::createDeb()
       cmCPackLogger(cmCPackLog::LOG_DEBUG, "RELATIVEDIR: \""
                       << relativeDir << "\"" << std::endl);
 
+#ifdef WIN32
+      std::string mode_t_adt_filename = *fileIt + ":cmake_mode_t";
+      cmsys::ifstream permissionStream(mode_t_adt_filename.c_str());
+
+      mode_t permissions = 0;
+
+      if (permissionStream) {
+        permissionStream >> std::oct >> permissions;
+      }
+
+      if (permissions != 0) {
+        data_tar.SetPermissions(permissions);
+      } else if (cmSystemTools::FileIsDirectory(*fileIt)) {
+        data_tar.SetPermissions(0755);
+      } else {
+        data_tar.ClearPermissions();
+      }
+#endif
+
       // do not recurse because the loop will do it
       if (!data_tar.Add(*fileIt, topLevelLength, ".", false)) {
         cmCPackLogger(cmCPackLog::LOG_ERROR, "Problem adding file to tar:"
@@ -504,15 +528,13 @@ int cmCPackDebGenerator::createDeb()
         continue;
       }
 
-      char md5sum[33];
-      if (!cmSystemTools::ComputeFileMD5(*fileIt, md5sum)) {
+      std::string output =
+        cmSystemTools::ComputeFileHash(*fileIt, cmCryptoHash::AlgoMD5);
+      if (output.empty()) {
         cmCPackLogger(cmCPackLog::LOG_ERROR, "Problem computing the md5 of "
                         << *fileIt << std::endl);
       }
 
-      md5sum[32] = 0;
-
-      std::string output(md5sum);
       output += "  " + *fileIt + "\n";
       // debian md5sums entries are like this:
       // 014f3604694729f3bf19263bac599765  usr/bin/ccmake
@@ -549,8 +571,8 @@ int cmCPackDebGenerator::createDeb()
     and
     https://lintian.debian.org/tags/control-file-has-bad-permissions.html
     */
-    const mode_t permission644 = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-    const mode_t permissionExecute = S_IXUSR | S_IXGRP | S_IXOTH;
+    const mode_t permission644 = 0644;
+    const mode_t permissionExecute = 0111;
     const mode_t permission755 = permission644 | permissionExecute;
 
     // for md5sum and control (that we have generated here), we use 644
@@ -827,7 +849,7 @@ static int copy_ar(CF* cfp, off_t size)
                        ? static_cast<size_t>(sz)
                        : sizeof(buf),
                      from)) > 0) {
-    sz -= nr;
+    sz -= static_cast<off_t>(nr);
     for (size_t off = 0; off < nr; nr -= off, off += nw) {
       if ((nw = fwrite(buf + off, 1, nr, to)) < nr) {
         return -1;
@@ -850,7 +872,6 @@ static int copy_ar(CF* cfp, off_t size)
 static int put_arobj(CF* cfp, struct stat* sb)
 {
   int result = 0;
-  struct ar_hdr* hdr;
 
   /* If passed an sb structure, reading a file from disk.  Get stat(2)
    * information, build a name and construct a header.  (Files are named
@@ -869,7 +890,7 @@ static int put_arobj(CF* cfp, struct stat* sb)
   if (gid > USHRT_MAX) {
     gid = USHRT_MAX;
   }
-  if (lname > sizeof(hdr->ar_name) || strchr(name, ' ')) {
+  if (lname > sizeof(ar_hdr().ar_name) || strchr(name, ' ')) {
     (void)sprintf(ar_hb, HDR1, AR_EFMT1, (int)lname, (long int)sb->st_mtime,
                   (unsigned)uid, (unsigned)gid, (unsigned)sb->st_mode,
                   (long long)sb->st_size + lname, ARFMAG);

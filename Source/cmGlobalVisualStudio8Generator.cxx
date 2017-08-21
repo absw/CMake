@@ -54,7 +54,7 @@ public:
   void GetDocumentation(cmDocumentationEntry& entry) const CM_OVERRIDE
   {
     entry.Name = std::string(vs8generatorName) + " [arch]";
-    entry.Brief = "Generates Visual Studio 2005 project files.  "
+    entry.Brief = "Deprecated.  Generates Visual Studio 2005 project files.  "
                   "Optional [arch] can be \"Win64\".";
   }
 
@@ -151,13 +151,6 @@ void cmGlobalVisualStudio8Generator::WriteSLNHeader(std::ostream& fout)
 {
   fout << "Microsoft Visual Studio Solution File, Format Version 9.00\n";
   fout << "# Visual Studio 2005\n";
-}
-
-void cmGlobalVisualStudio8Generator::GetDocumentation(
-  cmDocumentationEntry& entry)
-{
-  entry.Name = cmGlobalVisualStudio8Generator::GetActualName();
-  entry.Brief = "Generates Visual Studio 8 2005 project files.";
 }
 
 std::string cmGlobalVisualStudio8Generator::GetGenerateStampList()
@@ -298,7 +291,9 @@ bool cmGlobalVisualStudio8Generator::AddCheckTarget()
     commandLine.push_back("--check-stamp-list");
     commandLine.push_back(stampList.c_str());
     commandLine.push_back("--vs-solution-file");
-    commandLine.push_back("\"$(SolutionPath)\"");
+    std::string const sln = std::string(lg->GetBinaryDirectory()) + "/" +
+      lg->GetProjectName() + ".sln";
+    commandLine.push_back(sln);
     cmCustomCommandLines commandLines;
     commandLines.push_back(commandLine);
 
@@ -310,7 +305,7 @@ bool cmGlobalVisualStudio8Generator::AddCheckTarget()
     std::vector<std::string> no_byproducts;
     if (cmSourceFile* file = mf->AddCustomCommandToOutput(
           stamps, no_byproducts, listFiles, no_main_dependency, commandLines,
-          "Checking Build System", no_working_directory, true)) {
+          "Checking Build System", no_working_directory, true, false)) {
       gt->AddSource(file->GetFullPath());
     } else {
       cmSystemTools::Error("Error adding rule for ", stamps[0].c_str());
@@ -351,7 +346,7 @@ void cmGlobalVisualStudio8Generator::WriteSolutionConfigurations(
 }
 
 void cmGlobalVisualStudio8Generator::WriteProjectConfigurations(
-  std::ostream& fout, const std::string& name, cmStateEnums::TargetType type,
+  std::ostream& fout, const std::string& name, cmGeneratorTarget const& target,
   std::vector<std::string> const& configs,
   const std::set<std::string>& configsPartOfDefaultBuild,
   std::string const& platformMapping)
@@ -359,8 +354,13 @@ void cmGlobalVisualStudio8Generator::WriteProjectConfigurations(
   std::string guid = this->GetGUID(name);
   for (std::vector<std::string>::const_iterator i = configs.begin();
        i != configs.end(); ++i) {
+    const char* dstConfig = target.GetProperty("MAP_IMPORTED_CONFIG_" +
+                                               cmSystemTools::UpperCase(*i));
+    if (dstConfig == CM_NULLPTR) {
+      dstConfig = i->c_str();
+    }
     fout << "\t\t{" << guid << "}." << *i << "|" << this->GetPlatformName()
-         << ".ActiveCfg = " << *i << "|"
+         << ".ActiveCfg = " << dstConfig << "|"
          << (!platformMapping.empty() ? platformMapping
                                       : this->GetPlatformName())
          << "\n";
@@ -368,14 +368,14 @@ void cmGlobalVisualStudio8Generator::WriteProjectConfigurations(
       configsPartOfDefaultBuild.find(*i);
     if (!(ci == configsPartOfDefaultBuild.end())) {
       fout << "\t\t{" << guid << "}." << *i << "|" << this->GetPlatformName()
-           << ".Build.0 = " << *i << "|"
+           << ".Build.0 = " << dstConfig << "|"
            << (!platformMapping.empty() ? platformMapping
                                         : this->GetPlatformName())
            << "\n";
     }
-    if (this->NeedsDeploy(type)) {
+    if (this->NeedsDeploy(target.GetType())) {
       fout << "\t\t{" << guid << "}." << *i << "|" << this->GetPlatformName()
-           << ".Deploy.0 = " << *i << "|"
+           << ".Deploy.0 = " << dstConfig << "|"
            << (!platformMapping.empty() ? platformMapping
                                         : this->GetPlatformName())
            << "\n";

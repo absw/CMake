@@ -3,7 +3,8 @@
 #ifndef cmCPackBundleGenerator_h
 #define cmCPackBundleGenerator_h
 
-#include <cmConfigure.h>
+#include "cmConfigure.h"
+
 #include <string>
 
 #include "cmCPackDragNDropGenerator.h"
@@ -20,7 +21,7 @@ public:
   cmCPackTypeMacro(cmCPackBundleGenerator, cmCPackDragNDropGenerator);
 
   cmCPackBundleGenerator();
-  virtual ~cmCPackBundleGenerator();
+  ~cmCPackBundleGenerator() CM_OVERRIDE;
 
 protected:
   int InitializeInternal() CM_OVERRIDE;

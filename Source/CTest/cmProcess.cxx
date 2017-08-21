@@ -2,9 +2,9 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmProcess.h"
 
-#include <cmConfigure.h>
-#include <cmProcessOutput.h>
-#include <cmSystemTools.h>
+#include "cmConfigure.h"
+#include "cmProcessOutput.h"
+#include "cmSystemTools.h"
 #include <iostream>
 
 cmProcess::cmProcess()
@@ -239,4 +239,9 @@ void cmProcess::ResetStartTime()
 int cmProcess::GetExitException()
 {
   return cmsysProcess_GetExitException(this->Process);
+}
+
+std::string cmProcess::GetExitExceptionString()
+{
+  return cmsysProcess_GetExceptionString(this->Process);
 }

@@ -7,9 +7,9 @@
 #include "cmXMLParser.h"
 #include "cmXMLWriter.h"
 
-#include <cmsys/FStream.hxx>
-#include <cmsys/Glob.hxx>
-#include <cmsys/RegularExpression.hxx>
+#include "cmsys/FStream.hxx"
+#include "cmsys/Glob.hxx"
+#include "cmsys/RegularExpression.hxx"
 #include <iostream>
 #include <sstream>
 #include <string.h>
@@ -291,6 +291,7 @@ void cmCTestMemCheckHandler::GenerateDartOutput(cmXMLWriter& xml)
     return;
   }
   this->CTest->StartXML(xml, this->AppendXML);
+  this->CTest->GenerateSubprojectsOutput(xml);
   xml.StartElement("DynamicAnalysis");
   switch (this->MemoryTesterStyle) {
     case cmCTestMemCheckHandler::VALGRIND:
@@ -304,6 +305,9 @@ void cmCTestMemCheckHandler::GenerateDartOutput(cmXMLWriter& xml)
       break;
     case cmCTestMemCheckHandler::ADDRESS_SANITIZER:
       xml.Attribute("Checker", "AddressSanitizer");
+      break;
+    case cmCTestMemCheckHandler::LEAK_SANITIZER:
+      xml.Attribute("Checker", "LeakSanitizer");
       break;
     case cmCTestMemCheckHandler::THREAD_SANITIZER:
       xml.Attribute("Checker", "ThreadSanitizer");
@@ -459,6 +463,12 @@ bool cmCTestMemCheckHandler::InitializeMemoryChecking()
     this->LogWithPID = true; // even if we give the log file the pid is added
   }
   if (this->CTest->GetCTestConfiguration("MemoryCheckType") ==
+      "LeakSanitizer") {
+    this->MemoryTester = this->CTest->GetCTestConfiguration("CMakeCommand");
+    this->MemoryTesterStyle = cmCTestMemCheckHandler::LEAK_SANITIZER;
+    this->LogWithPID = true; // even if we give the log file the pid is added
+  }
+  if (this->CTest->GetCTestConfiguration("MemoryCheckType") ==
       "ThreadSanitizer") {
     this->MemoryTester = this->CTest->GetCTestConfiguration("CMakeCommand");
     this->MemoryTesterStyle = cmCTestMemCheckHandler::THREAD_SANITIZER;
@@ -586,6 +596,7 @@ bool cmCTestMemCheckHandler::InitializeMemoryChecking()
     }
     // these are almost the same but the env var used is different
     case cmCTestMemCheckHandler::ADDRESS_SANITIZER:
+    case cmCTestMemCheckHandler::LEAK_SANITIZER:
     case cmCTestMemCheckHandler::THREAD_SANITIZER:
     case cmCTestMemCheckHandler::MEMORY_SANITIZER:
     case cmCTestMemCheckHandler::UB_SANITIZER: {
@@ -597,12 +608,24 @@ bool cmCTestMemCheckHandler::InitializeMemoryChecking()
       this->MemoryTesterDynamicOptions.push_back("-E");
       this->MemoryTesterDynamicOptions.push_back("env");
       std::string envVar;
-      std::string extraOptions =
-        this->CTest->GetCTestConfiguration("MemoryCheckSanitizerOptions");
+      std::string extraOptions;
+      std::string suppressionsOption;
+      if (!this->CTest->GetCTestConfiguration("MemoryCheckSanitizerOptions")
+             .empty()) {
+        extraOptions = ":" +
+          this->CTest->GetCTestConfiguration("MemoryCheckSanitizerOptions");
+      }
+      if (!this->CTest->GetCTestConfiguration("MemoryCheckSuppressionFile")
+             .empty()) {
+        suppressionsOption = ":suppressions=" +
+          this->CTest->GetCTestConfiguration("MemoryCheckSuppressionFile");
+      }
       if (this->MemoryTesterStyle ==
           cmCTestMemCheckHandler::ADDRESS_SANITIZER) {
         envVar = "ASAN_OPTIONS";
-        extraOptions += " detect_leaks=1";
+      } else if (this->MemoryTesterStyle ==
+                 cmCTestMemCheckHandler::LEAK_SANITIZER) {
+        envVar = "LSAN_OPTIONS";
       } else if (this->MemoryTesterStyle ==
                  cmCTestMemCheckHandler::THREAD_SANITIZER) {
         envVar = "TSAN_OPTIONS";
@@ -613,9 +636,12 @@ bool cmCTestMemCheckHandler::InitializeMemoryChecking()
                  cmCTestMemCheckHandler::UB_SANITIZER) {
         envVar = "UBSAN_OPTIONS";
       }
+      // Quote log_path with single quotes; see
+      // https://bugs.chromium.org/p/chromium/issues/detail?id=467936
       std::string outputFile =
-        envVar + "=log_path=\"" + this->MemoryTesterOutputFile + "\" ";
-      this->MemoryTesterEnvironmentVariable = outputFile + extraOptions;
+        envVar + "=log_path='" + this->MemoryTesterOutputFile + "'";
+      this->MemoryTesterEnvironmentVariable =
+        outputFile + suppressionsOption + extraOptions;
       break;
     }
     default:
@@ -644,6 +670,7 @@ bool cmCTestMemCheckHandler::ProcessMemCheckOutput(const std::string& str,
     case cmCTestMemCheckHandler::PURIFY:
       return this->ProcessMemCheckPurifyOutput(str, log, results);
     case cmCTestMemCheckHandler::ADDRESS_SANITIZER:
+    case cmCTestMemCheckHandler::LEAK_SANITIZER:
     case cmCTestMemCheckHandler::THREAD_SANITIZER:
     case cmCTestMemCheckHandler::MEMORY_SANITIZER:
     case cmCTestMemCheckHandler::UB_SANITIZER:
@@ -679,6 +706,9 @@ bool cmCTestMemCheckHandler::ProcessMemCheckSanitizerOutput(
   switch (this->MemoryTesterStyle) {
     case cmCTestMemCheckHandler::ADDRESS_SANITIZER:
       regex = "ERROR: AddressSanitizer: (.*) on.*";
+      break;
+    case cmCTestMemCheckHandler::LEAK_SANITIZER:
+      // use leakWarning regex
       break;
     case cmCTestMemCheckHandler::THREAD_SANITIZER:
       regex = "WARNING: ThreadSanitizer: (.*) \\(pid=.*\\)";
@@ -772,7 +802,7 @@ bool cmCTestMemCheckHandler::ProcessMemCheckValgrindOutput(
   std::vector<std::string> lines;
   cmSystemTools::Split(str.c_str(), lines);
   bool unlimitedOutput = false;
-  if (str.find("CTEST_FULL_OUTPUT") != str.npos ||
+  if (str.find("CTEST_FULL_OUTPUT") != std::string::npos ||
       this->CustomMaximumFailedTestOutputSize == 0) {
     unlimitedOutput = true;
   }
@@ -924,7 +954,7 @@ bool cmCTestMemCheckHandler::ProcessMemCheckBoundsCheckerOutput(
       std::string& theLine = lines[cc];
       // check for command line arguments that are not escaped
       // correctly by BC
-      if (theLine.find("TargetArgs=") != theLine.npos) {
+      if (theLine.find("TargetArgs=") != std::string::npos) {
         // skip this because BC gets it wrong and we can't parse it
       } else if (!parser.ParseChunk(theLine.c_str(), theLine.size())) {
         cmCTestLog(this->CTest, ERROR_MESSAGE,

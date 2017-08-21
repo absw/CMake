@@ -2,12 +2,13 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCoreTryCompile.h"
 
-#include <cmConfigure.h>
-#include <cmsys/Directory.hxx>
+#include "cmConfigure.h"
+#include "cmsys/Directory.hxx"
 #include <set>
 #include <sstream>
 #include <stdio.h>
 #include <string.h>
+#include <utility>
 
 #include "cmAlgorithms.h"
 #include "cmExportTryCompileFileGenerator.h"
@@ -40,6 +41,8 @@ static std::string const kCMAKE_OSX_SYSROOT = "CMAKE_OSX_SYSROOT";
 static std::string const kCMAKE_POSITION_INDEPENDENT_CODE =
   "CMAKE_POSITION_INDEPENDENT_CODE";
 static std::string const kCMAKE_SYSROOT = "CMAKE_SYSROOT";
+static std::string const kCMAKE_SYSROOT_COMPILE = "CMAKE_SYSROOT_COMPILE";
+static std::string const kCMAKE_SYSROOT_LINK = "CMAKE_SYSROOT_LINK";
 static std::string const kCMAKE_TRY_COMPILE_OSX_ARCHITECTURES =
   "CMAKE_TRY_COMPILE_OSX_ARCHITECTURES";
 static std::string const kCMAKE_TRY_COMPILE_PLATFORM_VARIABLES =
@@ -108,10 +111,13 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
   std::string copyFileError;
   std::string cStandard;
   std::string cxxStandard;
+  std::string cudaStandard;
   std::string cStandardRequired;
   std::string cxxStandardRequired;
+  std::string cudaStandardRequired;
   std::string cExtensions;
   std::string cxxExtensions;
+  std::string cudaExtensions;
   std::vector<std::string> targets;
   std::string libsToLink = " ";
   bool useOldLinkLibs = true;
@@ -121,10 +127,13 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
   bool didCopyFileError = false;
   bool didCStandard = false;
   bool didCxxStandard = false;
+  bool didCudaStandard = false;
   bool didCStandardRequired = false;
   bool didCxxStandardRequired = false;
+  bool didCudaStandardRequired = false;
   bool didCExtensions = false;
   bool didCxxExtensions = false;
+  bool didCudaExtensions = false;
   bool useSources = argv[2] == "SOURCES";
   std::vector<std::string> sources;
 
@@ -139,10 +148,13 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
     DoingCopyFileError,
     DoingCStandard,
     DoingCxxStandard,
+    DoingCudaStandard,
     DoingCStandardRequired,
     DoingCxxStandardRequired,
+    DoingCudaStandardRequired,
     DoingCExtensions,
     DoingCxxExtensions,
+    DoingCudaExtensions,
     DoingSources
   };
   Doing doing = useSources ? DoingSources : DoingNone;
@@ -169,18 +181,27 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
     } else if (argv[i] == "CXX_STANDARD") {
       doing = DoingCxxStandard;
       didCxxStandard = true;
+    } else if (argv[i] == "CUDA_STANDARD") {
+      doing = DoingCudaStandard;
+      didCudaStandard = true;
     } else if (argv[i] == "C_STANDARD_REQUIRED") {
       doing = DoingCStandardRequired;
       didCStandardRequired = true;
     } else if (argv[i] == "CXX_STANDARD_REQUIRED") {
       doing = DoingCxxStandardRequired;
       didCxxStandardRequired = true;
+    } else if (argv[i] == "CUDA_STANDARD_REQUIRED") {
+      doing = DoingCudaStandardRequired;
+      didCudaStandardRequired = true;
     } else if (argv[i] == "C_EXTENSIONS") {
       doing = DoingCExtensions;
       didCExtensions = true;
     } else if (argv[i] == "CXX_EXTENSIONS") {
       doing = DoingCxxExtensions;
       didCxxExtensions = true;
+    } else if (argv[i] == "CUDA_EXTENSIONS") {
+      doing = DoingCudaExtensions;
+      didCudaExtensions = true;
     } else if (doing == DoingCMakeFlags) {
       cmakeFlags.push_back(argv[i]);
     } else if (doing == DoingCompileDefinitions) {
@@ -198,6 +219,7 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
             if (tgt->IsExecutableWithExports()) {
               break;
             }
+            CM_FALLTHROUGH;
           default:
             this->Makefile->IssueMessage(
               cmake::FATAL_ERROR,
@@ -227,17 +249,26 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
     } else if (doing == DoingCxxStandard) {
       cxxStandard = argv[i];
       doing = DoingNone;
+    } else if (doing == DoingCudaStandard) {
+      cudaStandard = argv[i];
+      doing = DoingNone;
     } else if (doing == DoingCStandardRequired) {
       cStandardRequired = argv[i];
       doing = DoingNone;
     } else if (doing == DoingCxxStandardRequired) {
       cxxStandardRequired = argv[i];
       doing = DoingNone;
+    } else if (doing == DoingCudaStandardRequired) {
+      cudaStandardRequired = argv[i];
+      doing = DoingNone;
     } else if (doing == DoingCExtensions) {
       cExtensions = argv[i];
       doing = DoingNone;
     } else if (doing == DoingCxxExtensions) {
       cxxExtensions = argv[i];
+      doing = DoingNone;
+    } else if (doing == DoingCudaExtensions) {
+      cudaExtensions = argv[i];
       doing = DoingNone;
     } else if (doing == DoingSources) {
       sources.push_back(argv[i]);
@@ -297,6 +328,12 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
       "CXX_STANDARD allowed only in source file signature.");
     return -1;
   }
+  if (didCudaStandard && !this->SrcFileSignature) {
+    this->Makefile->IssueMessage(
+      cmake::FATAL_ERROR,
+      "CUDA_STANDARD allowed only in source file signature.");
+    return -1;
+  }
   if (didCStandardRequired && !this->SrcFileSignature) {
     this->Makefile->IssueMessage(
       cmake::FATAL_ERROR,
@@ -309,6 +346,12 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
       "CXX_STANDARD_REQUIRED allowed only in source file signature.");
     return -1;
   }
+  if (didCudaStandardRequired && !this->SrcFileSignature) {
+    this->Makefile->IssueMessage(
+      cmake::FATAL_ERROR,
+      "CUDA_STANDARD_REQUIRED allowed only in source file signature.");
+    return -1;
+  }
   if (didCExtensions && !this->SrcFileSignature) {
     this->Makefile->IssueMessage(
       cmake::FATAL_ERROR,
@@ -319,6 +362,12 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
     this->Makefile->IssueMessage(
       cmake::FATAL_ERROR,
       "CXX_EXTENSIONS allowed only in source file signature.");
+    return -1;
+  }
+  if (didCudaExtensions && !this->SrcFileSignature) {
+    this->Makefile->IssueMessage(
+      cmake::FATAL_ERROR,
+      "CUDA_EXTENSIONS allowed only in source file signature.");
     return -1;
   }
 
@@ -468,6 +517,7 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
         this->Makefile->IssueMessage(
           cmake::FATAL_ERROR,
           cmPolicies::GetRequiredPolicyError(cmPolicies::CMP0066));
+        CM_FALLTHROUGH;
       case cmPolicies::NEW: {
         // NEW behavior is to pass config-specific compiler flags.
         static std::string const cfgDefault = "DEBUG";
@@ -505,6 +555,7 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
         this->Makefile->IssueMessage(
           cmake::FATAL_ERROR,
           cmPolicies::GetRequiredPolicyError(cmPolicies::CMP0056));
+        CM_FALLTHROUGH;
       case cmPolicies::NEW:
         // NEW behavior is to pass linker flags.
         {
@@ -563,6 +614,8 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
       vars.insert(kCMAKE_OSX_SYSROOT);
       vars.insert(kCMAKE_POSITION_INDEPENDENT_CODE);
       vars.insert(kCMAKE_SYSROOT);
+      vars.insert(kCMAKE_SYSROOT_COMPILE);
+      vars.insert(kCMAKE_SYSROOT_LINK);
       vars.insert(kCMAKE_WARN_DEPRECATED);
 
       if (const char* varListStr = this->Makefile->GetDefinition(
@@ -622,7 +675,7 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
       fprintf(fout, " \"%s\"", si->c_str());
 
       // Add dependencies on any non-temporary sources.
-      if (si->find("CMakeTmp") == si->npos) {
+      if (si->find("CMakeTmp") == std::string::npos) {
         this->Makefile->AddCMakeDependFile(*si);
       }
     }
@@ -630,16 +683,20 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
 
     bool const testC = testLangs.find("C") != testLangs.end();
     bool const testCxx = testLangs.find("CXX") != testLangs.end();
+    bool const testCuda = testLangs.find("CUDA") != testLangs.end();
 
     bool warnCMP0067 = false;
     bool honorStandard = true;
 
-    if (!didCStandard && !didCxxStandard && !didCStandardRequired &&
-        !didCxxStandardRequired && !didCExtensions && !didCxxExtensions) {
+    if (!didCStandard && !didCxxStandard && !didCudaStandard &&
+        !didCStandardRequired && !didCxxStandardRequired &&
+        !didCudaStandardRequired && !didCExtensions && !didCxxExtensions &&
+        !didCudaExtensions) {
       switch (this->Makefile->GetPolicyStatus(cmPolicies::CMP0067)) {
         case cmPolicies::WARN:
           warnCMP0067 = this->Makefile->PolicyOptionalWarningEnabled(
             "CMAKE_POLICY_WARNING_CMP0067");
+          CM_FALLTHROUGH;
         case cmPolicies::OLD:
           // OLD behavior is to not honor the language standard variables.
           honorStandard = false;
@@ -682,6 +739,20 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
             this->LookupStdVar("CMAKE_CXX_EXTENSIONS", warnCMP0067);
         }
       }
+      if (testCuda) {
+        if (!didCudaStandard) {
+          cudaStandard =
+            this->LookupStdVar("CMAKE_CUDA_STANDARD", warnCMP0067);
+        }
+        if (!didCudaStandardRequired) {
+          cudaStandardRequired =
+            this->LookupStdVar("CMAKE_CUDA_STANDARD_REQUIRED", warnCMP0067);
+        }
+        if (!didCudaExtensions) {
+          cudaExtensions =
+            this->LookupStdVar("CMAKE_CUDA_EXTENSIONS", warnCMP0067);
+        }
+      }
     }
 
     if (!this->WarnCMP0067.empty()) {
@@ -722,6 +793,19 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
       }
       if (!cxxExtensions.empty()) {
         writeProperty(fout, targetName, "CXX_EXTENSIONS", cxxExtensions);
+      }
+    }
+
+    if (testCuda) {
+      if (!cudaStandard.empty()) {
+        writeProperty(fout, targetName, "CUDA_STANDARD", cudaStandard);
+      }
+      if (!cudaStandardRequired.empty()) {
+        writeProperty(fout, targetName, "CUDA_STANDARD_REQUIRED",
+                      cudaStandardRequired);
+      }
+      if (!cudaExtensions.empty()) {
+        writeProperty(fout, targetName, "CUDA_EXTENSIONS", cudaExtensions);
       }
     }
 
@@ -806,18 +890,13 @@ void cmCoreTryCompile::CleanupFiles(const char* binDir)
 
   cmsys::Directory dir;
   dir.Load(binDir);
-  size_t fileNum;
   std::set<std::string> deletedFiles;
-  for (fileNum = 0; fileNum < dir.GetNumberOfFiles(); ++fileNum) {
-    if (strcmp(dir.GetFile(static_cast<unsigned long>(fileNum)), ".") &&
-        strcmp(dir.GetFile(static_cast<unsigned long>(fileNum)), "..")) {
-
-      if (deletedFiles.find(dir.GetFile(
-            static_cast<unsigned long>(fileNum))) == deletedFiles.end()) {
-        deletedFiles.insert(dir.GetFile(static_cast<unsigned long>(fileNum)));
-        std::string fullPath = binDir;
-        fullPath += "/";
-        fullPath += dir.GetFile(static_cast<unsigned long>(fileNum));
+  for (unsigned long i = 0; i < dir.GetNumberOfFiles(); ++i) {
+    const char* fileName = dir.GetFile(i);
+    if (strcmp(fileName, ".") != 0 && strcmp(fileName, "..") != 0) {
+      if (deletedFiles.insert(fileName).second) {
+        std::string const fullPath =
+          std::string(binDir).append("/").append(fileName);
         if (cmSystemTools::FileIsDirectory(fullPath)) {
           this->CleanupFiles(fullPath.c_str());
           cmSystemTools::RemoveADirectory(fullPath);
@@ -901,5 +980,4 @@ void cmCoreTryCompile::FindOutputFile(const std::string& targetName,
   emsg << cmWrap("  " + this->BinaryDirectory, searchDirs, tmpOutputFile, "\n")
        << "\n";
   this->FindErrorMessage = emsg.str();
-  return;
 }

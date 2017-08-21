@@ -10,6 +10,7 @@ Execute one or more child processes.
                   [WORKING_DIRECTORY <directory>]
                   [TIMEOUT <seconds>]
                   [RESULT_VARIABLE <variable>]
+                  [RESULTS_VARIABLE <variable>]
                   [OUTPUT_VARIABLE <variable>]
                   [ERROR_VARIABLE <variable>]
                   [INPUT_FILE <file>]
@@ -49,9 +50,15 @@ Options:
  specified number of seconds (fractions are allowed).
 
 ``RESULT_VARIABLE``
- The variable will be set to contain the result of running the processes.
+ The variable will be set to contain the result of last child process.
  This will be an integer return code from the last child or a string
  describing an error condition.
+
+``RESULTS_VARIABLE <variable>``
+ The variable will be set to contain the result of all processes as a
+ :ref:`;-list <CMake Language Lists>`, in order of the given ``COMMAND``
+ arguments.  Each entry will be an integer return code from the
+ corresponding child or a string describing an error condition.
 
 ``OUTPUT_VARIABLE``, ``ERROR_VARIABLE``
  The variable named will be set with the contents of the standard output
@@ -70,10 +77,21 @@ Options:
 ``ENCODING <name>``
  On Windows, the encoding that is used to decode output from the process.
  Ignored on other platforms.
- Valid encoding names are: ``AUTO`` (the default), ``NONE``, ``UTF8``,
- ``ANSI`` and ``OEM``.
- ``AUTO`` encoding means current active console's codepage will be used
- or if that isn't available then ``ANSI`` codepage will be used.
+ Valid encoding names are:
+
+ ``NONE``
+   Perform no decoding.  This assumes that the process output is encoded
+   in the same way as CMake's internal encoding (UTF-8).
+   This is the default.
+ ``AUTO``
+   Use the current active console's codepage or if that isn't
+   available then use ANSI.
+ ``ANSI``
+   Use the ANSI codepage.
+ ``OEM``
+   Use the original equipment manufacturer (OEM) code page.
+ ``UTF8``
+   Use the UTF-8 codepage.
 
 If more than one ``OUTPUT_*`` or ``ERROR_*`` option is given for the
 same pipe the precedence is not specified.

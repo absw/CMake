@@ -3,13 +3,14 @@
 #ifndef cmLocale_h
 #define cmLocale_h
 
-#include <cmConfigure.h>
+#include "cmConfigure.h"
 
 #include <locale.h>
+#include <string>
 
 class cmLocaleRAII
 {
-  const char* OldLocale;
+  CM_DISABLE_COPY(cmLocaleRAII)
 
 public:
   cmLocaleRAII()
@@ -17,7 +18,10 @@ public:
   {
     setlocale(LC_CTYPE, "");
   }
-  ~cmLocaleRAII() { setlocale(LC_CTYPE, this->OldLocale); }
+  ~cmLocaleRAII() { setlocale(LC_CTYPE, this->OldLocale.c_str()); }
+
+private:
+  std::string OldLocale;
 };
 
 #endif
