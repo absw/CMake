@@ -270,7 +270,6 @@ private:
 
   struct GlobalCmakeCfg
   {
-<<<<<<< HEAD
     std::string buildType;
     std::string iarCCompilerFlags;
     std::string iarCxxCompilerFlags;

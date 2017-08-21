@@ -608,8 +608,6 @@ void cmExtraIarGenerator::Generate()
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_CSPY_MEMFILE");
   GLOBALCFG.dbgIjetProbeconfig =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_IJET_PROBECONFIG");
-  GLOBALCFG.dbgProbeSelection =
-      globalMakefile->GetSafeDefinition("IAR_DEBUGGER_PROBE");
   GLOBALCFG.dbgLogFile =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_LOGFILE");
   GLOBALCFG.linkerEntryRoutine =
@@ -1334,11 +1332,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   const char* pGenLowLevelIfaceStr = GLOBALCFG.semihostingEnabled == "ON" ? "1" : "0";
 
   generalData->NewOption("GenLowLevelInterface")
-<<<<<<< HEAD
 	  ->NewState(cmSystemTools::IsOn(GLOBALCFG.genLowLevelInterface.c_str()) ? "1" : "0");
-=======
-                ->NewState(pGenLowLevelIfaceStr);
->>>>>>> korbel/iarplugin
   generalData->NewOption("GEndianModeBE")->NewState("1");
 
   const char* pBufferedStr = GLOBALCFG.bufferedTermOut == "ON" ? "1" : "0";
@@ -1718,20 +1712,6 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     cspyData->NewOption("OCDownloadSuppressDownload")->NewState("0");
     cspyData->NewOption("OCDownloadVerifyAll")->NewState("1");
     cspyData->NewOption("OCProductVersion")->NewState(GLOBALCFG.wbVersion);
-
-    if (GLOBALCFG.dbgProbeSelection == "J-Link")
-    {
-        cspyData->NewOption("OCDynDriverList")->NewState("JLINK_ID");
-    }
-    else if (GLOBALCFG.dbgProbeSelection == "I-Jet")
-    {
-        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
-    }
-    else
-    {
-        // I-Jet is the default probe.
-        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
-    }
 
     cspyData->NewOption("OCLastSavedByProductVersion")
             ->NewState(GLOBALCFG.wbVersion);
