@@ -1129,10 +1129,11 @@ void cmExtraIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
   buildCfg.name = GLOBALCFG.buildType;
   buildCfg.isDebug = (GLOBALCFG.buildType != "Release");
   buildCfg.exeDir = buildCfg.name;
-  buildCfg.objectDir = buildCfg.exeDir;
-  buildCfg.objectDir += "/Object";
-  buildCfg.listDir = buildCfg.exeDir;
-  buildCfg.listDir += "/List";
+  buildCfg.exeDir += "/Exe";
+  buildCfg.objectDir = buildCfg.name;
+  buildCfg.objectDir += "/Obj";
+  buildCfg.listDir = buildCfg.name;
+  buildCfg.listDir += "/Lst";
   buildCfg.toolchain = GLOBALCFG.tgtArch;
   buildCfg.outputFile = genTgt->GetExportName();
 
@@ -1294,8 +1295,8 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
 
   IarData* generalData = generalSettings->NewData(24, true, this->buildCfg.isDebug);
   generalData->NewOption("ExePath")->NewState(this->buildCfg.exeDir);
-  generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir + "/" + this->name);
-  generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir + "/" + this->name);
+  generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir);
+  generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir);
   generalData->NewOption("GEndianMode")->NewState("0");
   generalData->NewOption("Input variant", 3)->NewState("0");
   generalData->NewOption("Input description")
@@ -1482,14 +1483,14 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   config->AddChild(objCopySettings);
   IarData* objCopyData = objCopySettings->NewData(1, true, this->buildCfg.isDebug);
 
-  objCopyData->NewOption("OOCOutputFormat", 2)->NewState("2");
+  objCopyData->NewOption("OOCOutputFormat", 3)->NewState("3");
   objCopyData->NewOption("OCOutputOverride")->NewState("0");
 
   std::string outFile = this->buildCfg.outputFile;
   outFile += ".bin";
   objCopyData->NewOption("OOCOutputFile")->NewState(outFile);
   objCopyData->NewOption("OOCCommandLineProducer")->NewState("1");
-  objCopyData->NewOption("OOCObjCopyEnable")->NewState("0");
+  objCopyData->NewOption("OOCObjCopyEnable")->NewState("1");
 
 
   // CUSTOM:
@@ -1520,7 +1521,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   IarData* ilinkData = ilinkSettings->NewData(15, true, this->buildCfg.isDebug);
 
   outFile = this->buildCfg.outputFile;
-  outFile += ".elf";
+  outFile += ".out";
   ilinkData->NewOption("IlinkOutputFile")->NewState(outFile);
   ilinkData->NewOption("IlinkLibIOConfig")->NewState("1");
   ilinkData->NewOption("XLinkMisraHandler")->NewState("0");
@@ -1540,7 +1541,8 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   ilinkData->NewOption("IlinkLogModule")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogSection")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogVeneer")->NewState(this->buildCfg.isDebug ? "1" : "0");
-  ilinkData->NewOption("IlinkIcfOverride")->NewState("0");
+  ilinkData->NewOption("IlinkIcfOverride")
+                ->NewState(cmExtraIarGenerator::GLOBALCFG.linkerIcfOverride);
   ilinkData->NewOption("IlinkIcfFile")->NewState(this->buildCfg.icfPath);
   ilinkData->NewOption("IlinkIcfFileSlave")->NewState("");
   ilinkData->NewOption("IlinkEnableRemarks")->NewState("0");
