@@ -3,7 +3,7 @@
   Copyright 2004-2009 Kitware, Inc.
   Copyright 2004 Alexander Neundorf (neundorf@kde.org)
   Copyright 2007 Miguel A. Figueroa-Villanueva
-  Copyright 2014 Jakub Korbel
+  Copyright 2017 Jakub Korbel
 
   Distributed under the OSI-approved BSD License (the "License");
   see accompanying file Copyright.txt for details.
@@ -12,48 +12,93 @@
   implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
   See the License for more information.
 ============================================================================*/
-#ifndef cmExtraIarGenerator_h
-#define cmExtraIarGenerator_h
+#ifndef cmGlobalIarGenerator_h
+#define cmGlobalIarGenerator_h
 
-#include "cmExternalMakefileProjectGenerator.h"
+#include "cmGlobalGenerator.h"
+#include "cmGlobalGeneratorFactory.h"
+#include "cmDocumentationEntry.h"
 
 class cmMakefile;
 class cmGeneratedFileStream;
 
-/** \class cmExtraIarGenerator
+/** \class cmGlobalIarGenerator
  * \brief Write Eclipse project files for Makefile based projects
  */
-class cmExtraIarGenerator : public cmExternalMakefileProjectGenerator
+class cmGlobalIarGenerator : public cmGlobalGenerator
 {
 public:
   static const char* XML_DECL;
 
-  cmExtraIarGenerator();
+  cmGlobalIarGenerator(cmake* cm);
+  ~cmGlobalIarGenerator();
 
-  static cmExternalMakefileProjectGeneratorFactory* GetFactory();
+  cmLocalGenerator* CreateLocalGenerator(
+    cmMakefile* mf);
+
+  static cmGlobalGeneratorFactory* NewFactory()
+  {
+      return new cmGlobalGeneratorSimpleFactory<cmGlobalIarGenerator>();
+  }
 
   virtual std::string GetName() const {
-    return cmExtraIarGenerator::GetActualName();
+    return cmGlobalIarGenerator::GetActualName();
   }
 
   static std::string GetActualName() { return "IAR Workbench for ARM"; }
 
+  /// Overloaded methods. @see cmGlobalGenerator::GetDocumentation()
+  static void GetDocumentation(cmDocumentationEntry& entry);
+
+  ///
+  /// Utilized by the generator factory to determine if this generator
+  /// supports toolsets.
+  ///
+  static bool SupportsToolset() { return false; }
+
+  ///
+  /// Utilized by the generator factory to determine if this generator
+  /// supports platforms.
+  ///
+  static bool SupportsPlatform() { return false; }
+
+
+  /**
+  * Try to determine system information such as shared library
+  * extension, pthreads, byte order etc.
+  */
+  virtual void EnableLanguage(std::vector<std::string> const& languages,
+                              cmMakefile*, bool optional);
+  /*
+  * Determine what program to use for building the project.
+  */
+  bool FindMakeProgram(cmMakefile* mf) CM_OVERRIDE;
+
   void Generate() CM_OVERRIDE;
+
+  virtual void GenerateBuildCommand(
+      std::vector<std::string>& makeCommand, const std::string& makeProgram,
+      const std::string& projectName, const std::string& projectDir,
+      const std::string& targetName, const std::string& config, bool fast,
+      bool verbose,
+      std::vector<std::string> const& makeOptions = std::vector<std::string>());
 
   static std::string ToToolkitPath(std::string absolutePath);
 
   static std::string ToWorkbenchPath(std::string absolutePath);
 
+  void ConvertTargetToProject(const cmTarget& target,
+      const cmGeneratorTarget* genTgt);
+
 private:
+
+  std::string FindIarBuildCommand();
 
   void RegisterProject(const std::string& projectName);
 
   void GetCmdLines(std::vector<cmCustomCommand> const& rTmpCmdVec,
                    std::string& rBuildCmd,
                    int& rStart);
-
-  void ConvertTargetToProject(const cmTarget& target,
-      const cmGeneratorTarget* genTgt);
 
   struct CompilerOpts
   {
@@ -301,6 +346,10 @@ private:
     std::string bufferedTermOut;
     std::string semihostingEnabled;
   };
+
+  static const char* PROJ_FILE_EXT;
+  static const char* WS_FILE_EXT;
+  static const char* DEFAULT_MAKE_PROGRAM;
 
   Workspace workspace;
   static GlobalCmakeCfg GLOBALCFG;

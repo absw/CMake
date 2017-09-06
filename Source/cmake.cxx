@@ -60,6 +60,7 @@
 #if !defined(CMAKE_BOOT_MINGW)
 #include "cmGlobalBorlandMakefileGenerator.h"
 #include "cmGlobalGhsMultiGenerator.h"
+#include "cmGlobalIarGenerator.h"
 #include "cmGlobalJOMMakefileGenerator.h"
 #include "cmGlobalNMakeMakefileGenerator.h"
 #include "cmGlobalVisualStudio10Generator.h"
@@ -98,10 +99,6 @@
 
 #ifdef CMAKE_USE_ECLIPSE
 #include "cmExtraEclipseCDT4Generator.h"
-#endif
-
-#ifdef CMAKE_USE_IAR
-#include "cmExtraIarGenerator.h"
 #endif
 
 #if defined(__APPLE__)
@@ -908,10 +905,6 @@ void cmake::AddDefaultExtraGenerators()
 #ifdef CMAKE_USE_KDEVELOP
   this->ExtraGenerators.push_back(cmGlobalKdevelopGenerator::GetFactory());
 #endif
-
-#ifdef CMAKE_USE_IAR
-  this->ExtraGenerators.push_back(cmExtraIarGenerator::GetFactory());
-#endif
 #endif
 }
 
@@ -1692,6 +1685,7 @@ void cmake::AddDefaultGenerators()
   this->Generators.push_back(cmGlobalNMakeMakefileGenerator::NewFactory());
   this->Generators.push_back(cmGlobalJOMMakefileGenerator::NewFactory());
   this->Generators.push_back(cmGlobalGhsMultiGenerator::NewFactory());
+  this->Generators.push_back(cmGlobalIarGenerator::NewFactory());
 #endif
   this->Generators.push_back(cmGlobalMSYSMakefileGenerator::NewFactory());
   this->Generators.push_back(cmGlobalMinGWMakefileGenerator::NewFactory());

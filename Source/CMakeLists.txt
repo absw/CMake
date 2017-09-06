@@ -205,8 +205,6 @@ set(SRCS
   cmExtraKateGenerator.h
   cmExtraSublimeTextGenerator.cxx
   cmExtraSublimeTextGenerator.h
-  cmExtraIarGenerator.cxx
-  cmExtraIarGenerator.h
   cmFileLock.cxx
   cmFileLock.h
   cmFileLockPool.cxx
@@ -684,6 +682,10 @@ if (WIN32)
       cmGhsMultiTargetGenerator.h
       cmGhsMultiGpj.cxx
       cmGhsMultiGpj.h
+      cmGlobalIarGenerator.cxx
+      cmGlobalIarGenerator.h
+      cmLocalIarGenerator.cxx
+      cmLocalIarGenerator.h
       cmVSSetupHelper.cxx
       cmVSSetupHelper.h
       )

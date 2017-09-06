@@ -21,9 +21,10 @@
 #include <stdlib.h>
 #include <cstdlib>
 #include <assert.h>
-#include "cmExtraIarGenerator.h"
+#include "cmGlobalIarGenerator.h"
 #include "cmGlobalGenerator.h"
 #include "cmLocalGenerator.h"
+#include "cmLocalIarGenerator.h"
 
 #include <sstream>
 #include <cmsys/Glob.hxx>
@@ -31,13 +32,18 @@
 #include <algorithm>
 
 /// @brief XML Declaration.
-const char* cmExtraIarGenerator::XML_DECL =
+const char* cmGlobalIarGenerator::XML_DECL =
     "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n";
+
+const char* cmGlobalIarGenerator::PROJ_FILE_EXT = ".ewp";
+const char* cmGlobalIarGenerator::WS_FILE_EXT = ".eww";
+const char* cmGlobalIarGenerator::DEFAULT_MAKE_PROGRAM = "IarBuild";
+
 
 /// @brief Global configuration of the project (it should be visible
 /// from everywhere).
-cmExtraIarGenerator::GlobalCmakeCfg cmExtraIarGenerator::GLOBALCFG =
-    cmExtraIarGenerator::GlobalCmakeCfg();
+cmGlobalIarGenerator::GlobalCmakeCfg cmGlobalIarGenerator::GLOBALCFG =
+    cmGlobalIarGenerator::GlobalCmakeCfg();
 
 //------------------------------------------------------------------------------
 ///
@@ -503,46 +509,101 @@ public:
 
 
 //----------------------------------------------------------------------------
-cmExtraIarGenerator
-::cmExtraIarGenerator() : cmExternalMakefileProjectGenerator()
+cmGlobalIarGenerator::cmGlobalIarGenerator(cmake* cm)
+: cmGlobalGenerator(cm)
 {
-#if defined(_WIN32)
-  this->SupportedGlobalGenerators.push_back("MinGW Makefiles");
-  this->SupportedGlobalGenerators.push_back("NMake Makefiles");
-#endif
-  this->SupportedGlobalGenerators.push_back("Ninja");
-  this->SupportedGlobalGenerators.push_back("Unix Makefiles");
+}
+
+cmGlobalIarGenerator::~cmGlobalIarGenerator()
+{
+}
+
+cmLocalGenerator* cmGlobalIarGenerator::CreateLocalGenerator(
+  cmMakefile* mf)
+{
+  return new cmLocalIarGenerator(this, mf);
 }
 
 
-cmExternalMakefileProjectGeneratorFactory*
-cmExtraIarGenerator::GetFactory()
+void cmGlobalIarGenerator::GetDocumentation(cmDocumentationEntry& entry)
 {
-  static cmExternalMakefileProjectGeneratorSimpleFactory<
-  cmExtraIarGenerator>
-    factory(cmExtraIarGenerator::GetActualName(), "Generates IAR project files.");
+  entry.Name = GetActualName();
+  entry.Brief =
+    "Generates IAR Embedded Workbench files (experimental, work-in-progress).";
+}
 
-  if (factory.GetSupportedGlobalGenerators().empty()) {
-#if defined(_WIN32)
-    factory.AddSupportedGlobalGenerator("MinGW Makefiles");
-// disable until somebody actually tests it:
-// factory.AddSupportedGlobalGenerator("NMake Makefiles");
-// factory.AddSupportedGlobalGenerator("MSYS Makefiles");
-#endif
-    factory.AddSupportedGlobalGenerator("Ninja");
-    factory.AddSupportedGlobalGenerator("Unix Makefiles");
+
+void cmGlobalIarGenerator::EnableLanguage(
+  std::vector<std::string> const& l, cmMakefile* mf, bool optional)
+{
+    // Get global config from IAR_* variables from toolchain and CMakeLists.txt.
+    if (GLOBALCFG.iarArmPath.empty())
+    {
+        // Load the settings only once.
+        GLOBALCFG.iarArmPath = mf->GetSafeDefinition("IAR_ARM_PATH");
+    }
+
+    this->cmGlobalGenerator::EnableLanguage(l, mf, optional);
+}
+
+std::string cmGlobalIarGenerator::FindIarBuildCommand()
+{
+    std::string commonBin = GLOBALCFG.iarArmPath + "/../common/bin";
+    std::vector<std::string> userPaths;
+    userPaths.push_back(commonBin);
+
+    /*printf("USER PATH: %s\n", commonBin.c_str());*/
+
+    std::string makeProgram =
+      cmSystemTools::FindProgram(DEFAULT_MAKE_PROGRAM, userPaths);
+    if (makeProgram.empty()) {
+      makeProgram = DEFAULT_MAKE_PROGRAM;
+    }
+
+    return makeProgram;
+}
+
+
+bool cmGlobalIarGenerator::FindMakeProgram(cmMakefile* mf)
+{
+  // The GHS generator knows how to lookup its build tool
+  // directly instead of needing a helper module to do it, so we
+  // do not actually need to put CMAKE_MAKE_PROGRAM into the cache.
+  if (cmSystemTools::IsOff(mf->GetDefinition("CMAKE_MAKE_PROGRAM"))) {
+    mf->AddDefinition("CMAKE_MAKE_PROGRAM",
+                      this->FindIarBuildCommand().c_str());
+  }
+  return true;
+}
+
+
+void cmGlobalIarGenerator::GenerateBuildCommand(
+  std::vector<std::string>& makeCommand, const std::string& makeProgram,
+  const std::string& projectName, const std::string& projectDir,
+  const std::string& targetName, const std::string& /*config*/, bool /*fast*/,
+  bool /*verbose*/, std::vector<std::string> const& makeOptions)
+{
+    std::string projName = projectDir + "/" + targetName + ".ewp";
+
+  makeCommand.push_back(
+    this->SelectMakeProgram(makeProgram, this->FindIarBuildCommand()));
+
+  makeCommand.insert(makeCommand.end(), makeOptions.begin(),
+                     makeOptions.end());
+  if (!targetName.empty()) {
+      makeCommand.push_back(projName);
   }
 
-  return &factory;
+  /*printf("BuildCmd: %s %s (%s %s)\n", this->FindIarBuildCommand().c_str(), targetName.c_str(), projectDir.c_str(), projectName.c_str());*/
 }
 
+
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::Generate()
+void cmGlobalIarGenerator::Generate()
 {
   const cmLocalGenerator* const lgs0 =
-      this->GlobalGenerator->GetLocalGenerators()[0];
-  const cmMakefile* globalMakefile =
-      lgs0->GetMakefile();
+      this->GetLocalGenerators()[0];
+  const cmMakefile* globalMakefile = lgs0->GetMakefile();
 
   GLOBALCFG.buildType = globalMakefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
   std::string flagsWithType = std::string("CMAKE_C_FLAGS_") + cmSystemTools::UpperCase(GLOBALCFG.buildType);
@@ -558,8 +619,6 @@ void cmExtraIarGenerator::Generate()
   GLOBALCFG.iarLinkerFlags = globalMakefile->GetSafeDefinition("CMAKE_EXE_LINKER_FLAGS");
   GLOBALCFG.iarLinkerFlags += std::string(" ") + globalMakefile->GetSafeDefinition(flagsWithType);
 
-  // Get global config from IAR_* variables from toolchain and CMakeLists.txt.
-  GLOBALCFG.iarArmPath = globalMakefile->GetSafeDefinition("IAR_ARM_PATH");
   GLOBALCFG.compilerDlibConfig =
       globalMakefile->GetSafeDefinition("IAR_COMPILER_DLIB_CONFIG");
 
@@ -647,8 +706,8 @@ void cmExtraIarGenerator::Generate()
 
   // IAR needs a workspace name. This would be the root CMake project.
   for (std::map<std::string, std::vector<cmLocalGenerator*> >::const_iterator
-      it = this->GlobalGenerator->GetProjectMap().begin();
-      it!= this->GlobalGenerator->GetProjectMap().end();
+      it = this->GetProjectMap().begin();
+      it!= this->GetProjectMap().end();
       ++it)
     {
     const cmMakefile* makeFile = it->second[0]->GetMakefile();
@@ -659,58 +718,17 @@ void cmExtraIarGenerator::Generate()
       {
       this->workspace.workspaceDir = makeFile->GetCurrentBinaryDirectory();
       this->workspace.name = lgs0->GetProjectName();
-      }
+      } 
     }
 
-  // Gather all buildable targets and convert them into IAR XML files.
-  for (std::map<std::string, std::vector<cmLocalGenerator*> >::const_iterator
-      it = this->GlobalGenerator->GetProjectMap().begin();
-      it!= this->GlobalGenerator->GetProjectMap().end();
-      ++it)
-    {
-    const std::vector<cmLocalGenerator*>& lgs = it->second;
-    const cmMakefile* makeFile = it->second[0]->GetMakefile();
-    const cmTargets& projectTargets = makeFile->GetTargets();
-
-    for (std::vector<cmLocalGenerator*>::const_iterator lg=lgs.begin();
-        lg!=lgs.end(); lg++)
-      {
-      std::vector<cmGeneratorTarget*> targets=(*lg)->GetGeneratorTargets();
-      for (std::vector<cmGeneratorTarget*>::const_iterator ti = targets.begin();
-          ti != targets.end(); ti++)
-        {
-        switch((*ti)->GetType())
-        {
-        case cmStateEnums::EXECUTABLE:
-        case cmStateEnums::STATIC_LIBRARY:
-        case cmStateEnums::SHARED_LIBRARY:
-        case cmStateEnums::MODULE_LIBRARY:
-        case cmStateEnums::OBJECT_LIBRARY:
-          for(cmTargets::const_iterator it2 = projectTargets.begin();
-              it2!= projectTargets.end();
-              ++it2)
-            {
-            const cmTarget& tgt = it2->second;
-            if (tgt.GetType() == (*ti)->GetType() &&
-                tgt.GetName() == (*ti)->GetName())
-              {
-              this->ConvertTargetToProject(tgt, *ti);
-              }
-            }
-          break;
-        default:
-          break;
-        }
-        }
-      }
-    }
+  this->cmGlobalGenerator::Generate();
 
   // Finally, create IAR workspace file containing a list of all IAR projects.
   this->workspace.CreateWorkspaceFile();
 }
 
 //----------------------------------------------------------------------------
-std::string cmExtraIarGenerator::ToToolkitPath(std::string absolutePath)
+std::string cmGlobalIarGenerator::ToToolkitPath(std::string absolutePath)
 {
   if(!GLOBALCFG.iarArmPath.empty())
     {
@@ -727,7 +745,7 @@ std::string cmExtraIarGenerator::ToToolkitPath(std::string absolutePath)
 }
 
 //----------------------------------------------------------------------------
-std::string cmExtraIarGenerator::ToWorkbenchPath(std::string absolutePath)
+std::string cmGlobalIarGenerator::ToWorkbenchPath(std::string absolutePath)
 {
   if(!GLOBALCFG.iarArmPath.empty())
     {
@@ -986,8 +1004,8 @@ namespace IarArg
 };
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::ParseCmdLineCompilerOptions(std::string cmdLine,
-    cmExtraIarGenerator::CompilerOpts& compilerOpts)
+void cmGlobalIarGenerator::ParseCmdLineCompilerOptions(std::string cmdLine,
+    cmGlobalIarGenerator::CompilerOpts& compilerOpts)
 {
   const char* pChar = cmdLine.c_str();
   while(pChar != NULL || *pChar != '\0')
@@ -1006,14 +1024,14 @@ void cmExtraIarGenerator::ParseCmdLineCompilerOptions(std::string cmdLine,
 
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::ParseCmdLineLinkerOptions(std::string cmdLine,
-    cmExtraIarGenerator::LinkerOpts& compilerOpts)
+void cmGlobalIarGenerator::ParseCmdLineLinkerOptions(std::string cmdLine,
+    cmGlobalIarGenerator::LinkerOpts& compilerOpts)
 {
 
 }
 
 
-void cmExtraIarGenerator::GetCmdLines(std::vector<cmCustomCommand> const& rTmpCmdVec,
+void cmGlobalIarGenerator::GetCmdLines(std::vector<cmCustomCommand> const& rTmpCmdVec,
                                       std::string& rBuildCmd,
                                       int& rStart)
 {
@@ -1062,11 +1080,11 @@ void cmExtraIarGenerator::GetCmdLines(std::vector<cmCustomCommand> const& rTmpCm
 }
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
+void cmGlobalIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
     const cmGeneratorTarget* genTgt)
 {
   // For IAR, each code related target is considered a separate IAR project.
-  cmExtraIarGenerator::Project* project = new cmExtraIarGenerator::Project();
+  cmGlobalIarGenerator::Project* project = new cmGlobalIarGenerator::Project();
   project->name = genTgt->GetName();
 
   // Is this a lib or a linkable type?
@@ -1110,7 +1128,7 @@ void cmExtraIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
 
   std::vector<cmTarget*> owned = makeFile->GetOwnedImportedTargets();
 
-  cmExtraIarGenerator::BuildConfig buildCfg;
+  cmGlobalIarGenerator::BuildConfig buildCfg;
   buildCfg.name = GLOBALCFG.buildType;
   buildCfg.isDebug = (GLOBALCFG.buildType == "Debug");
   buildCfg.exeDir = buildCfg.name;
@@ -1254,7 +1272,7 @@ void cmExtraIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
 }
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::Project::CreateProjectFile()
+void cmGlobalIarGenerator::Project::CreateProjectFile()
 {
   std::string fileName = this->binaryDir;
   fileName += std::string("/") + this->name + ".ewp";
@@ -1312,13 +1330,13 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
                   " support, no multibytes in printf and scanf, and no hex floats"
                   " in strtod.");
   generalData->NewOption("OGProductVersion")
-                ->NewState(cmExtraIarGenerator::GLOBALCFG.wbVersion);
+                ->NewState(cmGlobalIarGenerator::GLOBALCFG.wbVersion);
   generalData->NewOption("OGLastSavedByProductVersion")
-                ->NewState(cmExtraIarGenerator::GLOBALCFG.wbVersion);
+                ->NewState(cmGlobalIarGenerator::GLOBALCFG.wbVersion);
   generalData->NewOption("GeneralEnableMisra")->NewState("0");
   generalData->NewOption("GeneralMisraVerbose")->NewState("0");
-  std::string chipSelection = cmExtraIarGenerator::GLOBALCFG.chipSelection;
-  chipSelection += "\t" + cmExtraIarGenerator::GLOBALCFG.chipSelection;
+  std::string chipSelection = cmGlobalIarGenerator::GLOBALCFG.chipSelection;
+  chipSelection += "\t" + cmGlobalIarGenerator::GLOBALCFG.chipSelection;
 
   generalData->NewOption("OGChipSelectEditMenu")->NewState(chipSelection);
 
@@ -1343,7 +1361,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
                     "00101111011110101011111111111111111111111111011111110"
                     "11111001111011111011111111111111111");
   generalData->NewOption("RTConfigPath2")
-              ->NewState(std::string("$TOOLKIT_DIR$\\INC\\c\\DLib_Config_") + cmExtraIarGenerator::GLOBALCFG.compilerDlibConfig + ".h");
+              ->NewState(std::string("$TOOLKIT_DIR$\\INC\\c\\DLib_Config_") + cmGlobalIarGenerator::GLOBALCFG.compilerDlibConfig + ".h");
   generalData->NewOption("GFPUCoreSlave", 20)->NewState("42");
   generalData->NewOption("GBECoreSlave", 20)->NewState("42");
   generalData->NewOption("OGUseCmsis")->NewState("0");
@@ -1390,7 +1408,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("OutputFile")->NewState("$FILE_BNAME$.o");
   iccArmData->NewOption("CCLibConfigHeader")->NewState("1");
   iccArmData->NewOption("PreInclude")
-                ->NewState(cmExtraIarGenerator::GLOBALCFG.compilerPreInclude);
+                ->NewState(cmGlobalIarGenerator::GLOBALCFG.compilerPreInclude);
   iccArmData->NewOption("CompilerMisraOverride")->NewState("0");
   iccArmData->NewOption("CCIncludePath2")->NewStates(this->includes);
   iccArmData->NewOption("CCStdIncCheck")->NewState("0");
@@ -1549,7 +1567,7 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
   ilinkData->NewOption("IlinkOverrideProgramEntryLabel")->NewState("0");
   ilinkData->NewOption("IlinkProgramEntryLabelSelect")->NewState("0");
   ilinkData->NewOption("IlinkProgramEntryLabel")
-                ->NewState(cmExtraIarGenerator::GLOBALCFG.linkerEntryRoutine);
+                ->NewState(cmGlobalIarGenerator::GLOBALCFG.linkerEntryRoutine);
   ilinkData->NewOption("DoFill")->NewState("0");
   ilinkData->NewOption("FillerByte")->NewState("0xFF");
   ilinkData->NewOption("FillerStart")->NewState("0x0");
@@ -1650,13 +1668,13 @@ void cmExtraIarGenerator::Project::CreateProjectFile()
 }
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::RegisterProject(const std::string& projectName)
+void cmGlobalIarGenerator::RegisterProject(const std::string& projectName)
 {
   (void) projectName;
 }
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::Project::CreateDebuggerFile()
+void cmGlobalIarGenerator::Project::CreateDebuggerFile()
 {
   std::string debuggerFileName = this->binaryDir;
   debuggerFileName += std::string("/") + this->name + ".ewd";
@@ -1689,10 +1707,10 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     cspyData->NewOption("OCVariant")->NewState("0");
     cspyData->NewOption("MacOverride")->NewState("1");
     cspyData->NewOption("MacFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgCspyMacfile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgCspyMacfile);
     cspyData->NewOption("MemOverride")->NewState("1");
     cspyData->NewOption("MemFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgCspyMemfile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgCspyMemfile);
     cspyData->NewOption("RunToEnable")->NewState(isDebug ? "1" : "0");
     cspyData->NewOption("RunToName")->NewState("main");
 
@@ -1730,7 +1748,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     cspyData->NewOption("CDevice")->NewState("1");
     cspyData->NewOption("FlashLoadersV3")
             ->NewState(isDebug ? "" :
-                cmExtraIarGenerator::GLOBALCFG.dbgCspyFlashLoaderv3);
+                cmGlobalIarGenerator::GLOBALCFG.dbgCspyFlashLoaderv3);
     cspyData->NewOption("OCImagesSuppressCheck1")->NewState("0");
     cspyData->NewOption("OCImagesPath1")->NewState("");
     cspyData->NewOption("OCImagesSuppressCheck2")->NewState("0");
@@ -1776,7 +1794,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     angelData->NewOption("ANGELTCPIP")->NewState("aaa.bbb.ccc.ddd");
     angelData->NewOption("DoAngelLogfile")->NewState("0");
     angelData->NewOption("AngelLogFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     angelData->NewOption("OCDriverInfo")->NewState("1");
 
     // CMSISDAP_ID
@@ -1794,7 +1812,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     cmsisdapData->NewOption("CMSISDAPHWResetDelay")->NewState("200");
     cmsisdapData->NewOption("CMSISDAPDoLogfile")->NewState("0");
     cmsisdapData->NewOption("CMSISDAPLogFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     cmsisdapData->NewOption("CMSISDAPInterfaceRadio")->NewState("0");
     cmsisdapData->NewOption("CMSISDAPInterfaceCmdLine")->NewState("0");
     cmsisdapData->NewOption("CMSISDAPMultiTargetEnable")->NewState("0");
@@ -1832,7 +1850,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     gdbData->NewOption("TCPIP")->NewState("aaa.bbb.ccc.ddd");
     gdbData->NewOption("DoLogfile")->NewState("0");
     gdbData->NewOption("LogFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     gdbData->NewOption("CCJTagBreakpointRadio")->NewState("0");
     gdbData->NewOption("CCJTagDoUpdateBreakpoints")->NewState("0");
     gdbData->NewOption("CCJTagUpdateBreakpoints")->NewState("main");
@@ -1843,7 +1861,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     IarData* iarromData = iarromId->NewData(1, true, isDebug);
 
     iarromData->NewOption("CRomLogFileCheck")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     iarromData->NewOption("CRomCommPort",0)->NewState("0");
     iarromData->NewOption("CRomCommBaud",0)->NewState("7");
     iarromData->NewOption("OCDriverInfo")->NewState("1");
@@ -1864,7 +1882,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     ijetData->NewOption("IjetPowerRadio")->NewState(isDebug ? "1" : "0");
     ijetData->NewOption("IjetDoLogfile")->NewState("0");
     ijetData->NewOption("IjetLogFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     ijetData->NewOption("IjetInterfaceRadio")->NewState("0");
     ijetData->NewOption("IjetInterfaceCmdLine")->NewState("0");
     ijetData->NewOption("IjetMultiTargetEnable")->NewState("0");
@@ -1898,7 +1916,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     ijetData->NewOption("OCProbeCfgOverride")->NewState(isDebug ? "1" : "0");
     ijetData->NewOption("OCProbeConfig")
             ->NewState(isDebug ?
-                cmExtraIarGenerator::GLOBALCFG.dbgIjetProbeconfig : "");
+                cmGlobalIarGenerator::GLOBALCFG.dbgIjetProbeconfig : "");
     ijetData->NewOption("IjetProbeConfigRadio")
             ->NewState(isDebug ? "1" : "0");
     ijetData->NewOption("IjetMultiCPUEnable")->NewState("0");
@@ -1915,7 +1933,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     jlinkData->NewOption("JLinkSpeed")->NewState("10000");
     jlinkData->NewOption("CCJLinkDoLogfile")->NewState("0");
     jlinkData->NewOption("CCJLinkLogFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     jlinkData->NewOption("CCJLinkHWResetDelay")->NewState("0");
     jlinkData->NewOption("OCDriverInfo")->NewState("1");
     jlinkData->NewOption("JLinkInitialSpeed")->NewState("32");
@@ -1971,7 +1989,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     lmiftdiData->NewOption("LmiftdiSpeed")->NewState("500");
     lmiftdiData->NewOption("CCLmiftdiDoLogfile")->NewState("0");
     lmiftdiData->NewOption("CCLmiftdiLogFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     lmiftdiData->NewOption("CCLmiFtdiInterfaceRadio")->NewState("0");
     lmiftdiData->NewOption("CCLmiFtdiInterfaceCmdLine")->NewState("0");
 
@@ -1985,7 +2003,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     macraigorData->NewOption("TCPIP")->NewState("aaa.bbb.ccc.ddd");
     macraigorData->NewOption("DoLogfile")->NewState("0");
     macraigorData->NewOption("LogFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     macraigorData->NewOption("DoEmuMultiTarget")->NewState("0");
     macraigorData->NewOption("EmuMultiTarget")->NewState("0@ARM7TDMI");
     macraigorData->NewOption("EmuHWReset")->NewState("0");
@@ -2014,7 +2032,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     pemicroData->NewOption("CCJPEMicroShowSettings")->NewState("0");
     pemicroData->NewOption("DoLogfile")->NewState("0");
     pemicroData->NewOption("LogFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     pemicroData->NewOption("CCPEMicroUSBDevice",0)->NewState("0");
     pemicroData->NewOption("CCPEMicroSerialPort",0)->NewState("0");
     pemicroData->NewOption("CCJPEMicroTCPIPAutoScanNetwork")->NewState("1");
@@ -2032,7 +2050,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     rdiData->NewOption("CRDIDriverDll")->NewState("###Uninitialized###");
     rdiData->NewOption("CRDILogFileCheck")->NewState("0");
     rdiData->NewOption("CRDILogFileEdit")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     rdiData->NewOption("CCRDIHWReset")->NewState("0");
     rdiData->NewOption("CCRDICatchReset")->NewState("0");
     rdiData->NewOption("CCRDICatchUndef")->NewState("0");
@@ -2068,7 +2086,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
             ->NewState("###Uninitialized###");
     thirdPartyData->NewOption("CThirdPartyLogFileCheck")->NewState("0");
     thirdPartyData->NewOption("CThirdPartyLogFileEditB")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
     thirdPartyData->NewOption("OCDriverInfo")->NewState("1");
 
     IarSettings* xds100Id = new IarSettings("XDS100_ID", 2);
@@ -2084,7 +2102,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     xds100Data->NewOption("BoardFile")->NewState("");
     xds100Data->NewOption("DoLogfile")->NewState("0");
     xds100Data->NewOption("LogFile")
-            ->NewState(cmExtraIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
 
 
     XmlNode* debuggerPlugins = new XmlNode("debuggerPlugins");
@@ -2092,7 +2110,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
     cmsys::Glob g;
     g.SetRecurse(true);
     g.RecurseThroughSymlinksOff();
-    std::string expr = cmExtraIarGenerator::GLOBALCFG.iarArmPath;
+    std::string expr = cmGlobalIarGenerator::GLOBALCFG.iarArmPath;
     expr += std::string("/plugins/") + "*.ewplugin";
 
     g.FindFiles(expr);
@@ -2106,13 +2124,13 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
       if (it->find("JPN") == std::string::npos)
         {
         debuggerPlugins->AddChild(
-            new IarDebuggerPlugin(cmExtraIarGenerator::ToToolkitPath(*it),
+            new IarDebuggerPlugin(cmGlobalIarGenerator::ToToolkitPath(*it),
                 ((it->find(GLOBALCFG.rtos) != std::string::npos))));
         }
       }
 
-    expr = cmExtraIarGenerator::GLOBALCFG.iarArmPath
-        .substr(0, cmExtraIarGenerator::GLOBALCFG.iarArmPath.length() -
+    expr = cmGlobalIarGenerator::GLOBALCFG.iarArmPath
+        .substr(0, cmGlobalIarGenerator::GLOBALCFG.iarArmPath.length() -
             (sizeof("/arm")-1));
     expr += std::string("/common/plugins/") + "*.ewplugin";
 
@@ -2128,7 +2146,7 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
             (it->find("CodeCoverage") != std::string::npos);
 
         debuggerPlugins->AddChild(
-            new IarDebuggerPlugin(cmExtraIarGenerator::ToWorkbenchPath(*it),
+            new IarDebuggerPlugin(cmGlobalIarGenerator::ToWorkbenchPath(*it),
                 load));
         }
       }
@@ -2151,12 +2169,12 @@ void cmExtraIarGenerator::Project::CreateDebuggerFile()
 }
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::Workspace::CreateWorkspaceFile()
+void cmGlobalIarGenerator::Workspace::CreateWorkspaceFile()
 {
   std::string wsFileName = this->workspaceDir + "/" + this->name + ".eww";
   std::string batFileName = this->workspaceDir + "/BUILD_" + this->name + ".bat";
 
-  std::string iarBuildCmd = cmExtraIarGenerator::GLOBALCFG.iarArmPath;
+  std::string iarBuildCmd = cmGlobalIarGenerator::GLOBALCFG.iarArmPath;
   std::size_t lastSlash = iarBuildCmd.find_last_of("/\\");
   if (lastSlash != std::string::npos)
   {
@@ -2169,7 +2187,7 @@ void cmExtraIarGenerator::Workspace::CreateWorkspaceFile()
 
   std::replace( iarBuildCmd.begin(), iarBuildCmd.end(), '/', '\\');
 
-  printf("Build cmd: %s.\n", iarBuildCmd.c_str());
+  /*printf("Build cmd: %s.\n", iarBuildCmd.c_str());*/
 
   FILE* pFile = fopen(wsFileName.c_str(), "w");
   FILE* pBatFile = fopen(batFileName.c_str(), "w");
@@ -2187,7 +2205,7 @@ void cmExtraIarGenerator::Workspace::CreateWorkspaceFile()
   XmlNode root = XmlNode("workspace");
 
   XmlNode* batch = new XmlNode("batchDefinition");
-  batch->NewChild("name", cmExtraIarGenerator::GLOBALCFG.buildType + "_BuildAll");
+  batch->NewChild("name", cmGlobalIarGenerator::GLOBALCFG.buildType + "_BuildAll");
 
   std::vector<Project*> vProjects;
 
@@ -2211,14 +2229,14 @@ void cmExtraIarGenerator::Workspace::CreateWorkspaceFile()
 
           XmlNode* member = batch->NewChild("member");
           member->NewChild("project", it->first);
-          member->NewChild("configuration", cmExtraIarGenerator::GLOBALCFG.buildType);
+          member->NewChild("configuration", cmGlobalIarGenerator::GLOBALCFG.buildType);
 
           // Add batch command.
           std::string projPathWin = projPath;
           std::replace( projPathWin.begin(), projPathWin.end(), '/', '\\');
           batchOutput += "\"" + iarBuildCmd + "\" \""
                   + projPathWin + "\" -build "
-                  + cmExtraIarGenerator::GLOBALCFG.buildType +" -log all\n";
+                  + cmGlobalIarGenerator::GLOBALCFG.buildType +" -log all\n";
       }
       else
       {
@@ -2242,14 +2260,14 @@ void cmExtraIarGenerator::Workspace::CreateWorkspaceFile()
 
       XmlNode* member = batch->NewChild("member");
       member->NewChild("project", (*it)->name);
-      member->NewChild("configuration", cmExtraIarGenerator::GLOBALCFG.buildType);
+      member->NewChild("configuration", cmGlobalIarGenerator::GLOBALCFG.buildType);
 
       // Add batch command.
       std::string projPathWin = projPath;
       std::replace( projPathWin.begin(), projPathWin.end(), '/', '\\');
       batchOutput += "\"" + iarBuildCmd + "\" \""
               + projPathWin + "\" -build "
-              + cmExtraIarGenerator::GLOBALCFG.buildType +" -log all\n";
+              + cmGlobalIarGenerator::GLOBALCFG.buildType +" -log all\n";
     }
 
   batchOutput += "\n\nREM ===================================================\n";
@@ -2272,7 +2290,7 @@ void cmExtraIarGenerator::Workspace::CreateWorkspaceFile()
 }
 
 //----------------------------------------------------------------------------
-void cmExtraIarGenerator::Workspace::RegisterProject(std::string wsName,
+void cmGlobalIarGenerator::Workspace::RegisterProject(std::string wsName,
     Project* project)
 {
   this->projects.insert(std::make_pair(wsName, project));
