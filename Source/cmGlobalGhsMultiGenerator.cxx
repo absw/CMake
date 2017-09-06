@@ -450,11 +450,9 @@ void cmGlobalGhsMultiGenerator::UpdateBuildFiles(
           this->GetCMakeInstance()->GetHomeOutputDirectory(), folderName,
           GhsMultiGpj::PROJECT);
       }
-      std::vector<cmsys::String> splitPath = cmSystemTools::SplitString(
-        cmGhsMultiTargetGenerator::GetRelBuildFileName(tgt));
-      std::string foldNameRelBuildFile(*(splitPath.end() - 2) + "/" +
-                                       splitPath.back());
-      *this->TargetFolderBuildStreams[folderName] << foldNameRelBuildFile
+
+      std::string relFileName = cmGhsMultiTargetGenerator::GetRelBuildFileName(tgt);
+      *this->TargetFolderBuildStreams[folderName] << relFileName
                                                   << " ";
       GhsMultiGpj::WriteGpjTag(cmGhsMultiTargetGenerator::GetGpjTag(tgt),
                                this->TargetFolderBuildStreams[folderName]);
