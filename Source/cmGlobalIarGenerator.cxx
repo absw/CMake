@@ -583,7 +583,13 @@ void cmGlobalIarGenerator::GenerateBuildCommand(
   const std::string& targetName, const std::string& /*config*/, bool /*fast*/,
   bool /*verbose*/, std::vector<std::string> const& makeOptions)
 {
-    std::string projName = projectDir + "/" + targetName + ".ewp";
+    if (targetName == "clean" || targetName == "preinstall")
+    {
+        makeCommand.push_back("echo");
+        makeCommand.push_back("Skipping target " + targetName);
+        return;
+    }
+  std::string projName = projectDir + "/" + targetName + ".ewp";
 
   makeCommand.push_back(
     this->SelectMakeProgram(makeProgram, this->FindIarBuildCommand()));
@@ -778,7 +784,7 @@ namespace IarArg
   const char* ParseValue(const char* pChar, char* pVal)
   {
     const char* pBegin = pChar;
-    // Valze.
+    // Value.
     bool breakMe = false;
     bool parseError = false;
     char escape = 0;
