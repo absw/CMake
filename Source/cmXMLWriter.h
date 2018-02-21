@@ -3,10 +3,12 @@
 #ifndef cmXMLWiter_h
 #define cmXMLWiter_h
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include "cmXMLSafe.h"
 
+#include <chrono>
+#include <ctime>
 #include <ostream>
 #include <stack>
 #include <string>
@@ -99,6 +101,22 @@ private:
     return cmXMLSafe(value).Quotes(false);
   }
 
+  /*
+   * Convert a std::chrono::system::time_point to the number of seconds since
+   * the UN*X epoch.
+   *
+   * It would be tempting to convert a time_point to number of seconds by
+   * using time_since_epoch(). Unfortunately the C++11 standard does not
+   * specify what the epoch of the system_clock must be.
+   * Therefore we must assume it is an arbitrary point in time. Instead of this
+   * method, it is recommended to convert it by means of the to_time_t method.
+   */
+  static std::time_t SafeContent(
+    std::chrono::system_clock::time_point const& value)
+  {
+    return std::chrono::system_clock::to_time_t(value);
+  }
+
   template <typename T>
   static T SafeContent(T value)
   {
@@ -107,7 +125,7 @@ private:
 
 private:
   std::ostream& Output;
-  std::stack<std::string, std::vector<std::string> > Elements;
+  std::stack<std::string, std::vector<std::string>> Elements;
   std::string IndentationElement;
   std::size_t Level;
   bool ElementOpen;

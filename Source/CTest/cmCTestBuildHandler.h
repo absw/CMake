@@ -3,12 +3,14 @@
 #ifndef cmCTestBuildHandler_h
 #define cmCTestBuildHandler_h
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include "cmCTestGenericHandler.h"
 
+#include "cmDuration.h"
 #include "cmProcessOutput.h"
 #include "cmsys/RegularExpression.hxx"
+#include <chrono>
 #include <deque>
 #include <iosfwd>
 #include <stddef.h>
@@ -31,16 +33,16 @@ public:
   /*
    * The main entry point for this class
    */
-  int ProcessHandler() CM_OVERRIDE;
+  int ProcessHandler() override;
 
   cmCTestBuildHandler();
 
-  void PopulateCustomVectors(cmMakefile* mf) CM_OVERRIDE;
+  void PopulateCustomVectors(cmMakefile* mf) override;
 
   /**
    * Initialize handler
    */
-  void Initialize() CM_OVERRIDE;
+  void Initialize() override;
 
   int GetTotalErrors() { return this->TotalErrors; }
   int GetTotalWarnings() { return this->TotalWarnings; }
@@ -86,14 +88,14 @@ private:
   void GenerateXMLHeader(cmXMLWriter& xml);
   void GenerateXMLLaunched(cmXMLWriter& xml);
   void GenerateXMLLogScraped(cmXMLWriter& xml);
-  void GenerateXMLFooter(cmXMLWriter& xml, double elapsed_build_time);
+  void GenerateXMLFooter(cmXMLWriter& xml, cmDuration elapsed_build_time);
   bool IsLaunchedErrorFile(const char* fname);
   bool IsLaunchedWarningFile(const char* fname);
 
   std::string StartBuild;
   std::string EndBuild;
-  double StartBuildTime;
-  double EndBuildTime;
+  std::chrono::system_clock::time_point StartBuildTime;
+  std::chrono::system_clock::time_point EndBuildTime;
 
   std::vector<std::string> CustomErrorMatches;
   std::vector<std::string> CustomErrorExceptions;

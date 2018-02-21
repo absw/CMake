@@ -13,8 +13,11 @@ File manipulation command.
 Write ``<content>`` into a file called ``<filename>``.  If the file does
 not exist, it will be created.  If the file already exists, ``WRITE``
 mode will overwrite it and ``APPEND`` mode will append to the end.
-(If the file is a build input, use the :command:`configure_file` command
-to update the file only when its content changes.)
+Any directories in the path specified by ``<filename>`` that do not
+exist will be created.
+
+If the file is a build input, use the :command:`configure_file` command
+to update the file only when its content changes.
 
 ------------------------------------------------------------------------------
 
@@ -105,11 +108,9 @@ Generate a list of files that match the ``<globbing-expressions>`` and
 store it into the ``<variable>``.  Globbing expressions are similar to
 regular expressions, but much simpler.  If ``RELATIVE`` flag is
 specified, the results will be returned as relative paths to the given
-path.  No specific order of results is defined other than that it is
-deterministic.  If order is important then sort the list explicitly
-(e.g. using the :command:`list(SORT)` command).
+path.  The results will be ordered lexicographically.
 
-By default ``GLOB`` lists directories - directories are omited in result if
+By default ``GLOB`` lists directories - directories are omitted in result if
 ``LIST_DIRECTORIES`` is set to false.
 
 .. note::
@@ -231,6 +232,31 @@ Options to both ``DOWNLOAD`` and ``UPLOAD`` are:
 ``HTTPHEADER <HTTP-header>``
   HTTP header for operation. Suboption can be repeated several times.
 
+``NETRC <level>``
+  Specify whether the .netrc file is to be used for operation.  If this
+  option is not specified, the value of the ``CMAKE_NETRC`` variable
+  will be used instead.
+  Valid levels are:
+
+  ``IGNORED``
+    The .netrc file is ignored.
+    This is the default.
+  ``OPTIONAL``
+    The .netrc file is optional, and information in the URL is preferred.
+    The file will be scanned to find which ever information is not specified
+    in the URL.
+  ``REQUIRED``
+    The .netrc file is required, and information in the URL is ignored.
+
+``NETRC_FILE <file>``
+  Specify an alternative .netrc file to the one in your home directory,
+  if the ``NETRC`` level is ``OPTIONAL`` or ``REQUIRED``. If this option
+  is not specified, the value of the ``CMAKE_NETRC_FILE`` variable will
+  be used instead.
+
+If neither ``NETRC`` option is given CMake will check variables
+``CMAKE_NETRC`` and ``CMAKE_NETRC_FILE``, respectively.
+
 Additional options to ``DOWNLOAD`` are:
 
 ``EXPECTED_HASH ALGO=<value>``
@@ -254,6 +280,23 @@ certificates are not checked by default.  Set ``TLS_VERIFY`` to ``ON`` to
 check certificates and/or use ``EXPECTED_HASH`` to verify downloaded content.
 If neither ``TLS`` option is given CMake will check variables
 ``CMAKE_TLS_VERIFY`` and ``CMAKE_TLS_CAINFO``, respectively.
+
+------------------------------------------------------------------------------
+
+::
+
+  file(TOUCH [<files>...])
+  file(TOUCH_NOCREATE [<files>...])
+
+Create a file with no content if it does not yet exist. If the file already
+exists, its access and/or modification will be updated to the time when the
+function call is executed.
+
+Use TOUCH_NOCREATE to touch a file if it exists but not create it. If a file
+does not exist it will be silently ignored.
+
+With TOUCH and TOUCH_NOCREATE the contents of an existing file will not be
+modified.
 
 ------------------------------------------------------------------------------
 

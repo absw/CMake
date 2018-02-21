@@ -7,13 +7,12 @@ This file must be translated to C++ and modified to build everywhere.
 
 Run flex >= 2.6 like this:
 
-  flex --nounistd -DFLEXINT_H --prefix=cmCommandArgument_yy --header-file=cmCommandArgumentLexer.h -ocmCommandArgumentLexer.cxx cmCommandArgumentLexer.in.l
+  flex --nounistd -DFLEXINT_H --noline --header-file=cmCommandArgumentLexer.h -ocmCommandArgumentLexer.cxx cmCommandArgumentLexer.in.l
 
 Modify cmCommandArgumentLexer.cxx:
-  - remove trailing whitespace: sed -i 's/\s*$//' cmCommandArgumentLexer.h cmCommandArgumentLexer.cxx
-  - remove blank lines at end of file
-  - #include "cmStandardLexer.h" at the top
-  - add cast in yy_scan_bytes for loop condition of _yybytes_len to size_t
+  - remove trailing whitespace:              sed -i 's/\s*$//' cmCommandArgumentLexer.h cmCommandArgumentLexer.cxx
+  - remove blank lines at end of file:       sed -i '${/^$/d;}' cmCommandArgumentLexer.h cmCommandArgumentLexer.cxx
+  - #include "cmStandardLexer.h" at the top: sed -i '1i#include "cmStandardLexer.h"' cmCommandArgumentLexer.cxx
 
 */
 
@@ -29,8 +28,17 @@ Modify cmCommandArgumentLexer.cxx:
 /* Include the set of tokens from the parser.  */
 #include "cmCommandArgumentParserTokens.h"
 
+static const char *DCURLYVariable = "${";
+static const char *RCURLYVariable = "}";
+static const char *ATVariable = "@";
+static const char *DOLLARVariable = "$";
+static const char *LCURLYVariable = "{";
+static const char *BSLASHVariable = "\\";
+
 /*--------------------------------------------------------------------------*/
 %}
+
+%option prefix="cmCommandArgument_yy"
 
 %option reentrant
 %option noyywrap
@@ -62,21 +70,21 @@ Modify cmCommandArgumentLexer.cxx:
 "${" {
   //std::cerr << __LINE__ << " here: [" << yytext << "]" << std::endl;
   //yyextra->AllocateParserType(yylvalp, yytext, strlen(yytext));
-  yylvalp->str = yyextra->DCURLYVariable;
+  yylvalp->str = DCURLYVariable;
   return cal_DCURLY;
 }
 
 "}" {
   //std::cerr << __LINE__ << " here: [" << yytext << "]" << std::endl;
   //yyextra->AllocateParserType(yylvalp, yytext, strlen(yytext));
-  yylvalp->str = yyextra->RCURLYVariable;
+  yylvalp->str = RCURLYVariable;
   return cal_RCURLY;
 }
 
 "@" {
   //std::cerr << __LINE__ << " here: [" << yytext << "]" << std::endl;
   //yyextra->AllocateParserType(yylvalp, yytext, strlen(yytext));
-  yylvalp->str = yyextra->ATVariable;
+  yylvalp->str = ATVariable;
   return cal_AT;
 }
 
@@ -102,25 +110,25 @@ Modify cmCommandArgumentLexer.cxx:
 
 "$" {
   //yyextra->AllocateParserType(yylvalp, yytext, strlen(yytext));
-  yylvalp->str = yyextra->DOLLARVariable;
+  yylvalp->str = DOLLARVariable;
   return cal_DOLLAR;
 }
 
 "{" {
   //yyextra->AllocateParserType(yylvalp, yytext, strlen(yytext));
-  yylvalp->str = yyextra->LCURLYVariable;
+  yylvalp->str = LCURLYVariable;
   return cal_LCURLY;
 }
 
 <ESCAPES>"\\" {
   //yyextra->AllocateParserType(yylvalp, yytext, strlen(yytext));
-  yylvalp->str = yyextra->BSLASHVariable;
+  yylvalp->str = BSLASHVariable;
   return cal_BSLASH;
 }
 
 <NOESCAPES>"\\" {
   //yyextra->AllocateParserType(yylvalp, yytext, strlen(yytext));
-  yylvalp->str = yyextra->BSLASHVariable;
+  yylvalp->str = BSLASHVariable;
   return cal_SYMBOL;
 }
 

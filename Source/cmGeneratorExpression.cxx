@@ -3,16 +3,17 @@
 #include "cmGeneratorExpression.h"
 
 #include "cmsys/RegularExpression.hxx"
+#include <memory> // IWYU pragma: keep
 #include <utility>
 
 #include "assert.h"
 #include "cmAlgorithms.h"
 #include "cmGeneratorExpressionContext.h"
+#include "cmGeneratorExpressionDAGChecker.h"
 #include "cmGeneratorExpressionEvaluator.h"
 #include "cmGeneratorExpressionLexer.h"
 #include "cmGeneratorExpressionParser.h"
 #include "cmSystemTools.h"
-#include "cm_auto_ptr.hxx"
 
 cmGeneratorExpression::cmGeneratorExpression(
   const cmListFileBacktrace& backtrace)
@@ -20,14 +21,14 @@ cmGeneratorExpression::cmGeneratorExpression(
 {
 }
 
-CM_AUTO_PTR<cmCompiledGeneratorExpression> cmGeneratorExpression::Parse(
+std::unique_ptr<cmCompiledGeneratorExpression> cmGeneratorExpression::Parse(
   std::string const& input)
 {
-  return CM_AUTO_PTR<cmCompiledGeneratorExpression>(
+  return std::unique_ptr<cmCompiledGeneratorExpression>(
     new cmCompiledGeneratorExpression(this->Backtrace, input));
 }
 
-CM_AUTO_PTR<cmCompiledGeneratorExpression> cmGeneratorExpression::Parse(
+std::unique_ptr<cmCompiledGeneratorExpression> cmGeneratorExpression::Parse(
   const char* input)
 {
   return this->Parse(std::string(input ? input : ""));
@@ -68,7 +69,7 @@ const char* cmCompiledGeneratorExpression::EvaluateWithContext(
     return this->Input.c_str();
   }
 
-  this->Output = "";
+  this->Output.clear();
 
   std::vector<cmGeneratorExpressionEvaluator*>::const_iterator it =
     this->Evaluators.begin();
@@ -81,7 +82,7 @@ const char* cmCompiledGeneratorExpression::EvaluateWithContext(
     this->SeenTargetProperties.insert(context.SeenTargetProperties.begin(),
                                       context.SeenTargetProperties.end());
     if (context.HadError) {
-      this->Output = "";
+      this->Output.clear();
       break;
     }
   }
@@ -199,15 +200,14 @@ static void prefixItems(const std::string& content, std::string& result,
   std::vector<std::string> entries;
   cmGeneratorExpression::Split(content, entries);
   const char* sep = "";
-  for (std::vector<std::string>::const_iterator ei = entries.begin();
-       ei != entries.end(); ++ei) {
+  for (std::string const& e : entries) {
     result += sep;
     sep = ";";
-    if (!cmSystemTools::FileIsFullPath(ei->c_str()) &&
-        cmGeneratorExpression::Find(*ei) != 0) {
+    if (!cmSystemTools::FileIsFullPath(e) &&
+        cmGeneratorExpression::Find(e) != 0) {
       result += prefix;
     }
-    result += *ei;
+    result += e;
   }
 }
 
@@ -297,7 +297,7 @@ void cmGeneratorExpression::Split(const std::string& input,
       std::string::size_type startPos = input.rfind(';', pos);
       if (startPos == std::string::npos) {
         preGenex = part;
-        part = "";
+        part.clear();
       } else if (startPos != pos - 1 && startPos >= lastPos) {
         part = input.substr(lastPos, startPos - lastPos);
         preGenex = input.substr(startPos + 1, pos - startPos - 1);
@@ -379,10 +379,25 @@ void cmCompiledGeneratorExpression::GetMaxLanguageStandard(
   const cmGeneratorTarget* tgt, std::map<std::string, std::string>& mapping)
 {
   typedef std::map<cmGeneratorTarget const*,
-                   std::map<std::string, std::string> >
+                   std::map<std::string, std::string>>
     MapType;
   MapType::const_iterator it = this->MaxLanguageStandard.find(tgt);
   if (it != this->MaxLanguageStandard.end()) {
     mapping = it->second;
   }
+}
+
+const char* cmGeneratorExpressionInterpreter::Evaluate(
+  const char* expression, const std::string& property)
+{
+  if (this->Target.empty()) {
+    return this->EvaluateExpression(expression);
+  }
+
+  // Specify COMPILE_OPTIONS to DAGchecker, same semantic as COMPILE_FLAGS
+  cmGeneratorExpressionDAGChecker dagChecker(
+    this->Target, property == "COMPILE_FLAGS" ? "COMPILE_OPTIONS" : property,
+    nullptr, nullptr);
+
+  return this->EvaluateExpression(expression, &dagChecker);
 }

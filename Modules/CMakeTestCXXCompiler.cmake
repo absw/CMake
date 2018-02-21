@@ -16,7 +16,7 @@ include(CMakeTestCompilerCommon)
 unset(CMAKE_CXX_COMPILER_WORKS CACHE)
 
 # This file is used by EnableLanguage in cmGlobalGenerator to
-# determine that that selected C++ compiler can actually compile
+# determine that the selected C++ compiler can actually compile
 # and link the most basic of programs.   If not, a fatal error
 # is set and cmake stops processing commands and will not generate
 # any makefiles or projects.
@@ -41,9 +41,10 @@ if(NOT CMAKE_CXX_COMPILER_WORKS)
   file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
     "Determining if the CXX compiler works failed with "
     "the following output:\n${__CMAKE_CXX_COMPILER_OUTPUT}\n\n")
-  message(FATAL_ERROR "The C++ compiler \"${CMAKE_CXX_COMPILER}\" "
+  string(REPLACE "\n" "\n  " _output "${__CMAKE_CXX_COMPILER_OUTPUT}")
+  message(FATAL_ERROR "The C++ compiler\n  \"${CMAKE_CXX_COMPILER}\"\n"
     "is not able to compile a simple test program.\nIt fails "
-    "with the following output:\n ${__CMAKE_CXX_COMPILER_OUTPUT}\n\n"
+    "with the following output:\n  ${_output}\n\n"
     "CMake will not be able to correctly generate this project.")
 else()
   if(CXX_TEST_WAS_RUN)

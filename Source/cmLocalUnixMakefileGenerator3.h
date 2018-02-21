@@ -3,7 +3,7 @@
 #ifndef cmLocalUnixMakefileGenerator3_h
 #define cmLocalUnixMakefileGenerator3_h
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include "cmDepends.h"
 #include "cmLocalCommonGenerator.h"
@@ -19,7 +19,6 @@ class cmCustomCommandGenerator;
 class cmGeneratorTarget;
 class cmGlobalGenerator;
 class cmMakefile;
-class cmSourceFile;
 
 /** \class cmLocalUnixMakefileGenerator3
  * \brief Write a LocalUnix makefiles.
@@ -31,14 +30,14 @@ class cmLocalUnixMakefileGenerator3 : public cmLocalCommonGenerator
 {
 public:
   cmLocalUnixMakefileGenerator3(cmGlobalGenerator* gg, cmMakefile* mf);
-  ~cmLocalUnixMakefileGenerator3() CM_OVERRIDE;
+  ~cmLocalUnixMakefileGenerator3() override;
 
-  void ComputeHomeRelativeOutputPath() CM_OVERRIDE;
+  void ComputeHomeRelativeOutputPath() override;
 
   /**
    * Generate the makefile for this directory.
    */
-  void Generate() CM_OVERRIDE;
+  void Generate() override;
 
   // this returns the relative path between the HomeOutputDirectory and this
   // local generators StartOutputDirectory
@@ -89,8 +88,8 @@ public:
 
   // append flags to a string
   void AppendFlags(std::string& flags,
-                   const std::string& newFlags) CM_OVERRIDE;
-  void AppendFlags(std::string& flags, const char* newFlags) CM_OVERRIDE;
+                   const std::string& newFlags) const override;
+  void AppendFlags(std::string& flags, const char* newFlags) const override;
 
   // append an echo command
   enum EchoColor
@@ -108,18 +107,18 @@ public:
     std::string Arg;
   };
   void AppendEcho(std::vector<std::string>& commands, std::string const& text,
-                  EchoColor color = EchoNormal,
-                  EchoProgress const* = CM_NULLPTR);
+                  EchoColor color = EchoNormal, EchoProgress const* = nullptr);
 
   /** Get whether the makefile is to have color.  */
   bool GetColorMakefile() const { return this->ColorMakefile; }
 
-  std::string GetTargetDirectory(cmGeneratorTarget const* target) const
-    CM_OVERRIDE;
+  std::string GetTargetDirectory(
+    cmGeneratorTarget const* target) const override;
 
   // create a command that cds to the start dir then runs the commands
   void CreateCDCommand(std::vector<std::string>& commands,
-                       const char* targetDir, std::string const& relDir);
+                       std::string const& targetDir,
+                       std::string const& relDir);
 
   static std::string ConvertToQuotedOutputPath(const char* p,
                                                bool useWatcomQuote);
@@ -130,10 +129,10 @@ public:
   /** Called from command-line hook to bring dependencies up to date
       for a target.  */
   bool UpdateDependencies(const char* tgtInfo, bool verbose,
-                          bool color) CM_OVERRIDE;
+                          bool color) override;
 
   /** Called from command-line hook to clear dependencies.  */
-  void ClearDependencies(cmMakefile* mf, bool verbose) CM_OVERRIDE;
+  void ClearDependencies(cmMakefile* mf, bool verbose) override;
 
   /** write some extra rules such as make test etc */
   void WriteSpecialTargetsTop(std::ostream& makefileStream);
@@ -238,11 +237,11 @@ protected:
                            cmGeneratorTarget* target,
                            std::string const& relative,
                            bool echo_comment = false,
-                           std::ostream* content = CM_NULLPTR);
+                           std::ostream* content = nullptr);
   void AppendCleanCommand(std::vector<std::string>& commands,
                           const std::vector<std::string>& files,
                           cmGeneratorTarget* target,
-                          const char* filename = CM_NULLPTR);
+                          const char* filename = nullptr);
 
   // Helper methods for dependeny updates.
   bool ScanDependencies(
@@ -252,10 +251,6 @@ protected:
 
 private:
   std::string MaybeConvertWatcomShellCommand(std::string const& cmd);
-
-  void ComputeObjectFilenames(
-    std::map<cmSourceFile const*, std::string>& mapping,
-    cmGeneratorTarget const* gt = CM_NULLPTR) CM_OVERRIDE;
 
   friend class cmMakefileTargetGenerator;
   friend class cmMakefileExecutableTargetGenerator;
@@ -272,7 +267,7 @@ private:
     cmGeneratorTarget* Target;
     std::string Language;
     LocalObjectEntry()
-      : Target(CM_NULLPTR)
+      : Target(nullptr)
       , Language()
     {
     }

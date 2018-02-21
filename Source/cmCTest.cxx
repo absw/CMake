@@ -12,9 +12,11 @@
 #include "cmsys/String.hxx"
 #include "cmsys/SystemInformation.hxx"
 #include <algorithm>
+#include <chrono>
 #include <ctype.h>
 #include <iostream>
 #include <map>
+#include <memory> // IWYU pragma: keep
 #include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,7 +52,6 @@
 #include "cmVersion.h"
 #include "cmVersionConfig.h"
 #include "cmXMLWriter.h"
-#include "cm_auto_ptr.hxx"
 #include "cmake.h"
 
 #if defined(__BEOS__) || defined(__HAIKU__)
@@ -67,7 +68,7 @@
 struct tm* cmCTest::GetNightlyTime(std::string const& str, bool tomorrowtag)
 {
   struct tm* lctime;
-  time_t tctime = time(CM_NULLPTR);
+  time_t tctime = time(nullptr);
   lctime = gmtime(&tctime);
   char buf[1024];
   // add todays year day and month to the time in str because
@@ -85,7 +86,7 @@ struct tm* cmCTest::GetNightlyTime(std::string const& str, bool tomorrowtag)
   // As such, this time may be in the past or in the future.
   time_t ntime = curl_getdate(buf, &tctime);
   cmCTestLog(this, DEBUG, "   Get curl time: " << ntime << std::endl);
-  tctime = time(CM_NULLPTR);
+  tctime = time(nullptr);
   cmCTestLog(this, DEBUG, "   Get the current time: " << tctime << std::endl);
 
   const int dayLength = 24 * 60 * 60;
@@ -131,7 +132,7 @@ std::string cmCTest::CleanString(const std::string& str)
 
 std::string cmCTest::CurrentTime()
 {
-  time_t currenttime = time(CM_NULLPTR);
+  time_t currenttime = time(nullptr);
   struct tm* t = localtime(&currenttime);
   // return ::CleanString(ctime(&currenttime));
   char current_time[1024];
@@ -147,7 +148,7 @@ std::string cmCTest::CurrentTime()
 std::string cmCTest::GetCostDataFile()
 {
   std::string fname = this->GetCTestConfiguration("CostDataFile");
-  if (fname == "") {
+  if (fname.empty()) {
     fname = this->GetBinaryDir() + "/Testing/Temporary/CTestCostData.txt";
   }
   return fname;
@@ -157,7 +158,7 @@ std::string cmCTest::GetCostDataFile()
 static size_t HTTPResponseCallback(void* ptr, size_t size, size_t nmemb,
                                    void* data)
 {
-  int realsize = (int)(size * nmemb);
+  int realsize = static_cast<int>(size * nmemb);
 
   std::string* response = static_cast<std::string*>(data);
   const char* chPtr = static_cast<char*>(ptr);
@@ -183,7 +184,7 @@ int cmCTest::HTTPRequest(std::string url, HTTPMethod method,
       ::curl_easy_setopt(curl, CURLOPT_POSTFIELDS, fields.c_str());
       break;
     case cmCTest::HTTP_PUT:
-      if (!cmSystemTools::FileExists(putFile.c_str())) {
+      if (!cmSystemTools::FileExists(putFile)) {
         response = "Error: File ";
         response += putFile + " does not exist.\n";
         return -1;
@@ -206,7 +207,7 @@ int cmCTest::HTTPRequest(std::string url, HTTPMethod method,
 
   // set response options
   ::curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, HTTPResponseCallback);
-  ::curl_easy_setopt(curl, CURLOPT_FILE, (void*)&response);
+  ::curl_easy_setopt(curl, CURLOPT_FILE, &response);
   ::curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
 
   CURLcode res = ::curl_easy_perform(curl);
@@ -222,12 +223,11 @@ std::string cmCTest::MakeURLSafe(const std::string& str)
 {
   std::ostringstream ost;
   char buffer[10];
-  for (std::string::size_type pos = 0; pos < str.size(); pos++) {
-    unsigned char ch = str[pos];
+  for (unsigned char ch : str) {
     if ((ch > 126 || ch < 32 || ch == '&' || ch == '%' || ch == '+' ||
          ch == '=' || ch == '@') &&
         ch != 9) {
-      sprintf(buffer, "%02x;", (unsigned int)ch);
+      sprintf(buffer, "%02x;", static_cast<unsigned int>(ch));
       ost << buffer;
     } else {
       ost << ch;
@@ -242,7 +242,7 @@ std::string cmCTest::DecodeURL(const std::string& in)
   for (const char* c = in.c_str(); *c; ++c) {
     if (*c == '%' && isxdigit(*(c + 1)) && isxdigit(*(c + 2))) {
       char buf[3] = { *(c + 1), *(c + 2), 0 };
-      out.append(1, char(strtoul(buf, CM_NULLPTR, 16)));
+      out.append(1, char(strtoul(buf, nullptr, 16)));
       c += 2;
     } else {
       out.append(1, *c);
@@ -260,7 +260,6 @@ cmCTest::cmCTest()
   this->TestLoad = 0;
   this->SubmitIndex = 0;
   this->Failover = false;
-  this->BatchJobs = false;
   this->ForceNewCTestProcess = false;
   this->TomorrowTag = false;
   this->Verbose = false;
@@ -278,15 +277,11 @@ cmCTest::cmCTest()
   this->TestModel = cmCTest::EXPERIMENTAL;
   this->MaxTestNameWidth = 30;
   this->InteractiveDebugMode = true;
-  this->TimeOut = 0;
-  this->GlobalTimeout = 0;
-  this->LastStopTimeout = 24 * 60 * 60;
+  this->TimeOut = cmDuration::zero();
+  this->GlobalTimeout = cmDuration::zero();
   this->CompressXMLFiles = false;
-  this->CTestConfigFile = "";
-  this->ScheduleType = "";
-  this->StopTime = "";
-  this->NextDayStopTime = false;
-  this->OutputLogFile = CM_NULLPTR;
+  this->ScheduleType.clear();
+  this->OutputLogFile = nullptr;
   this->OutputLogFileLastTag = -1;
   this->SuppressUpdatingCTestConfiguration = false;
   this->DartVersion = 1;
@@ -331,10 +326,8 @@ cmCTest::cmCTest()
   this->TestingHandlers["submit"] = new cmCTestSubmitHandler;
   this->TestingHandlers["upload"] = new cmCTestUploadHandler;
 
-  cmCTest::t_TestingHandlers::iterator it;
-  for (it = this->TestingHandlers.begin(); it != this->TestingHandlers.end();
-       ++it) {
-    it->second->SetCTestInstance(this);
+  for (auto& handler : this->TestingHandlers) {
+    handler.second->SetCTestInstance(this);
   }
 
   // Make sure we can capture the build tool output.
@@ -344,7 +337,7 @@ cmCTest::cmCTest()
 cmCTest::~cmCTest()
 {
   cmDeleteAll(this->TestingHandlers);
-  this->SetOutputLogFileName(CM_NULLPTR);
+  this->SetOutputLogFileName(nullptr);
 }
 
 void cmCTest::SetParallelLevel(int level)
@@ -424,9 +417,8 @@ int cmCTest::Initialize(const char* binary_dir, cmCTestStartCommand* command)
   cm.SetHomeOutputDirectory("");
   cm.GetCurrentSnapshot().SetDefaultDefinitions();
   cmGlobalGenerator gg(&cm);
-  CM_AUTO_PTR<cmMakefile> mf(new cmMakefile(&gg, cm.GetCurrentSnapshot()));
-  if (!this->ReadCustomConfigurationFileTree(this->BinaryDir.c_str(),
-                                             mf.get())) {
+  cmMakefile mf(&gg, cm.GetCurrentSnapshot());
+  if (!this->ReadCustomConfigurationFileTree(this->BinaryDir.c_str(), &mf)) {
     cmCTestOptionalLog(
       this, DEBUG, "Cannot find custom configuration file tree" << std::endl,
       quiet);
@@ -437,7 +429,7 @@ int cmCTest::Initialize(const char* binary_dir, cmCTestStartCommand* command)
     // Verify "Testing" directory exists:
     //
     std::string testingDir = this->BinaryDir + "/Testing";
-    if (cmSystemTools::FileExists(testingDir.c_str())) {
+    if (cmSystemTools::FileExists(testingDir)) {
       if (!cmSystemTools::FileIsDirectory(testingDir)) {
         cmCTestLog(this, ERROR_MESSAGE, "File "
                      << testingDir
@@ -446,7 +438,7 @@ int cmCTest::Initialize(const char* binary_dir, cmCTestStartCommand* command)
         return 0;
       }
     } else {
-      if (!cmSystemTools::MakeDirectory(testingDir.c_str())) {
+      if (!cmSystemTools::MakeDirectory(testingDir)) {
         cmCTestLog(this, ERROR_MESSAGE, "Cannot create directory "
                      << testingDir << std::endl);
         return 0;
@@ -465,7 +457,7 @@ int cmCTest::Initialize(const char* binary_dir, cmCTestStartCommand* command)
     std::string tag;
 
     if (createNewTag) {
-      time_t tctime = time(CM_NULLPTR);
+      time_t tctime = time(nullptr);
       if (this->TomorrowTag) {
         tctime += (24 * 60 * 60);
       }
@@ -480,7 +472,7 @@ int cmCTest::Initialize(const char* binary_dir, cmCTestStartCommand* command)
                &min);
         if (year != lctime->tm_year + 1900 || mon != lctime->tm_mon + 1 ||
             day != lctime->tm_mday) {
-          tag = "";
+          tag.clear();
         }
         std::string tagmode;
         if (cmSystemTools::GetLineFromStream(tfin, tagmode)) {
@@ -490,7 +482,7 @@ int cmCTest::Initialize(const char* binary_dir, cmCTestStartCommand* command)
         }
         tfin.close();
       }
-      if (tag.empty() || (CM_NULLPTR != command) || this->Parts[PartStart]) {
+      if (tag.empty() || (nullptr != command) || this->Parts[PartStart]) {
         cmCTestOptionalLog(
           this, DEBUG,
           "TestModel: " << this->GetTestModelString() << std::endl, quiet);
@@ -512,7 +504,7 @@ int cmCTest::Initialize(const char* binary_dir, cmCTestStartCommand* command)
           ofs << this->GetTestModelString() << std::endl;
         }
         ofs.close();
-        if (CM_NULLPTR == command) {
+        if (nullptr == command) {
           cmCTestOptionalLog(this, OUTPUT, "Create new tag: "
                                << tag << " - " << this->GetTestModelString()
                                << std::endl,
@@ -564,9 +556,9 @@ bool cmCTest::InitializeFromCommand(cmCTestStartCommand* command)
   bld_dir_fname += "/CTestConfig.cmake";
   cmSystemTools::ConvertToUnixSlashes(bld_dir_fname);
 
-  if (cmSystemTools::FileExists(bld_dir_fname.c_str())) {
+  if (cmSystemTools::FileExists(bld_dir_fname)) {
     fname = bld_dir_fname;
-  } else if (cmSystemTools::FileExists(src_dir_fname.c_str())) {
+  } else if (cmSystemTools::FileExists(src_dir_fname)) {
     fname = src_dir_fname;
   }
 
@@ -626,16 +618,13 @@ bool cmCTest::UpdateCTestConfiguration()
   if (this->SuppressUpdatingCTestConfiguration) {
     return true;
   }
-  std::string fileName = this->CTestConfigFile;
-  if (fileName.empty()) {
-    fileName = this->BinaryDir + "/CTestConfiguration.ini";
-    if (!cmSystemTools::FileExists(fileName.c_str())) {
-      fileName = this->BinaryDir + "/DartConfiguration.tcl";
-    }
+  std::string fileName = this->BinaryDir + "/CTestConfiguration.ini";
+  if (!cmSystemTools::FileExists(fileName)) {
+    fileName = this->BinaryDir + "/DartConfiguration.tcl";
   }
   cmCTestLog(this, HANDLER_VERBOSE_OUTPUT,
              "UpdateCTestConfiguration  from :" << fileName << "\n");
-  if (!cmSystemTools::FileExists(fileName.c_str())) {
+  if (!cmSystemTools::FileExists(fileName)) {
     // No need to exit if we are not producing XML
     if (this->ProduceXML) {
       cmCTestLog(this, ERROR_MESSAGE, "Cannot find file: " << fileName
@@ -685,7 +674,8 @@ bool cmCTest::UpdateCTestConfiguration()
     this->BinaryDir = this->GetCTestConfiguration("BuildDirectory");
     cmSystemTools::ChangeDirectory(this->BinaryDir);
   }
-  this->TimeOut = atoi(this->GetCTestConfiguration("TimeOut").c_str());
+  this->TimeOut =
+    std::chrono::seconds(atoi(this->GetCTestConfiguration("TimeOut").c_str()));
   std::string const& testLoad = this->GetCTestConfiguration("TestLoad");
   if (!testLoad.empty()) {
     unsigned long load;
@@ -751,7 +741,7 @@ bool cmCTest::OpenOutputFile(const std::string& path, const std::string& name,
   if (!path.empty()) {
     testingDir += "/" + path;
   }
-  if (cmSystemTools::FileExists(testingDir.c_str())) {
+  if (cmSystemTools::FileExists(testingDir)) {
     if (!cmSystemTools::FileIsDirectory(testingDir)) {
       cmCTestLog(this, ERROR_MESSAGE, "File "
                    << testingDir << " is in the place of the testing directory"
@@ -759,7 +749,7 @@ bool cmCTest::OpenOutputFile(const std::string& path, const std::string& name,
       return false;
     }
   } else {
-    if (!cmSystemTools::MakeDirectory(testingDir.c_str())) {
+    if (!cmSystemTools::MakeDirectory(testingDir)) {
       cmCTestLog(this, ERROR_MESSAGE, "Cannot create directory " << testingDir
                                                                  << std::endl);
       return false;
@@ -800,7 +790,7 @@ bool cmCTest::CTestFileExists(const std::string& filename)
 {
   std::string testingDir =
     this->BinaryDir + "/Testing/" + this->CurrentTag + "/" + filename;
-  return cmSystemTools::FileExists(testingDir.c_str());
+  return cmSystemTools::FileExists(testingDir);
 }
 
 cmCTestGenericHandler* cmCTest::GetInitializedHandler(const char* handler)
@@ -808,7 +798,7 @@ cmCTestGenericHandler* cmCTest::GetInitializedHandler(const char* handler)
   cmCTest::t_TestingHandlers::iterator it =
     this->TestingHandlers.find(handler);
   if (it == this->TestingHandlers.end()) {
-    return CM_NULLPTR;
+    return nullptr;
   }
   it->second->Initialize();
   return it->second;
@@ -819,7 +809,7 @@ cmCTestGenericHandler* cmCTest::GetHandler(const char* handler)
   cmCTest::t_TestingHandlers::iterator it =
     this->TestingHandlers.find(handler);
   if (it == this->TestingHandlers.end()) {
-    return CM_NULLPTR;
+    return nullptr;
   }
   return it->second;
 }
@@ -843,7 +833,8 @@ int cmCTest::ProcessSteps()
   for (Part p = PartStart; notest && p != PartCount; p = Part(p + 1)) {
     notest = !this->Parts[p];
   }
-  if (this->Parts[PartUpdate] && (this->GetRemainingTimeAllowed() - 120 > 0)) {
+  if (this->Parts[PartUpdate] &&
+      (this->GetRemainingTimeAllowed() > std::chrono::minutes(2))) {
     cmCTestGenericHandler* uphandler = this->GetHandler("update");
     uphandler->SetPersistentOption(
       "SourceDirectory",
@@ -857,33 +848,34 @@ int cmCTest::ProcessSteps()
     return 0;
   }
   if (this->Parts[PartConfigure] &&
-      (this->GetRemainingTimeAllowed() - 120 > 0)) {
+      (this->GetRemainingTimeAllowed() > std::chrono::minutes(2))) {
     if (this->GetHandler("configure")->ProcessHandler() < 0) {
       res |= cmCTest::CONFIGURE_ERRORS;
     }
   }
-  if (this->Parts[PartBuild] && (this->GetRemainingTimeAllowed() - 120 > 0)) {
+  if (this->Parts[PartBuild] &&
+      (this->GetRemainingTimeAllowed() > std::chrono::minutes(2))) {
     this->UpdateCTestConfiguration();
     if (this->GetHandler("build")->ProcessHandler() < 0) {
       res |= cmCTest::BUILD_ERRORS;
     }
   }
   if ((this->Parts[PartTest] || notest) &&
-      (this->GetRemainingTimeAllowed() - 120 > 0)) {
+      (this->GetRemainingTimeAllowed() > std::chrono::minutes(2))) {
     this->UpdateCTestConfiguration();
     if (this->GetHandler("test")->ProcessHandler() < 0) {
       res |= cmCTest::TEST_ERRORS;
     }
   }
   if (this->Parts[PartCoverage] &&
-      (this->GetRemainingTimeAllowed() - 120 > 0)) {
+      (this->GetRemainingTimeAllowed() > std::chrono::minutes(2))) {
     this->UpdateCTestConfiguration();
     if (this->GetHandler("coverage")->ProcessHandler() < 0) {
       res |= cmCTest::COVERAGE_ERRORS;
     }
   }
   if (this->Parts[PartMemCheck] &&
-      (this->GetRemainingTimeAllowed() - 120 > 0)) {
+      (this->GetRemainingTimeAllowed() > std::chrono::minutes(2))) {
     this->UpdateCTestConfiguration();
     if (this->GetHandler("memcheck")->ProcessHandler() < 0) {
       res |= cmCTest::MEMORY_ERRORS;
@@ -898,7 +890,7 @@ int cmCTest::ProcessSteps()
       for (kk = 0; kk < d.GetNumberOfFiles(); kk++) {
         const char* file = d.GetFile(kk);
         std::string fullname = notes_dir + "/" + file;
-        if (cmSystemTools::FileExists(fullname.c_str()) &&
+        if (cmSystemTools::FileExists(fullname) &&
             !cmSystemTools::FileIsDirectory(fullname)) {
           if (!this->NotesFiles.empty()) {
             this->NotesFiles += ";";
@@ -947,10 +939,10 @@ int cmCTest::GetTestModelFromString(const char* str)
     return cmCTest::EXPERIMENTAL;
   }
   std::string rstr = cmSystemTools::LowerCase(str);
-  if (cmHasLiteralPrefix(rstr.c_str(), "cont")) {
+  if (cmHasLiteralPrefix(rstr, "cont")) {
     return cmCTest::CONTINUOUS;
   }
-  if (cmHasLiteralPrefix(rstr.c_str(), "nigh")) {
+  if (cmHasLiteralPrefix(rstr, "nigh")) {
     return cmCTest::NIGHTLY;
   }
   return cmCTest::EXPERIMENTAL;
@@ -962,7 +954,7 @@ int cmCTest::GetTestModelFromString(const char* str)
 //######################################################################
 
 int cmCTest::RunMakeCommand(const char* command, std::string& output,
-                            int* retVal, const char* dir, int timeout,
+                            int* retVal, const char* dir, cmDuration timeout,
                             std::ostream& ofs, Encoding encoding)
 {
   // First generate the command and arguments
@@ -973,17 +965,19 @@ int cmCTest::RunMakeCommand(const char* command, std::string& output,
   }
 
   std::vector<const char*> argv;
-  for (std::vector<std::string>::const_iterator a = args.begin();
-       a != args.end(); ++a) {
-    argv.push_back(a->c_str());
+  argv.reserve(args.size() + 1);
+  for (std::string const& a : args) {
+    argv.push_back(a.c_str());
   }
-  argv.push_back(CM_NULLPTR);
+  argv.push_back(nullptr);
 
-  output = "";
+  output.clear();
   cmCTestLog(this, HANDLER_VERBOSE_OUTPUT, "Run command:");
-  std::vector<const char*>::iterator ait;
-  for (ait = argv.begin(); ait != argv.end() && *ait; ++ait) {
-    cmCTestLog(this, HANDLER_VERBOSE_OUTPUT, " \"" << *ait << "\"");
+  for (char const* arg : argv) {
+    if (!arg) {
+      break;
+    }
+    cmCTestLog(this, HANDLER_VERBOSE_OUTPUT, " \"" << arg << "\"");
   }
   cmCTestLog(this, HANDLER_VERBOSE_OUTPUT, std::endl);
 
@@ -992,7 +986,7 @@ int cmCTest::RunMakeCommand(const char* command, std::string& output,
   cmsysProcess_SetCommand(cp, &*argv.begin());
   cmsysProcess_SetWorkingDirectory(cp, dir);
   cmsysProcess_SetOption(cp, cmsysProcess_Option_HideWindow, 1);
-  cmsysProcess_SetTimeout(cp, timeout);
+  cmsysProcess_SetTimeout(cp, timeout.count());
   cmsysProcess_Execute(cp);
 
   // Initialize tick's
@@ -1007,11 +1001,11 @@ int cmCTest::RunMakeCommand(const char* command, std::string& output,
   cmCTestLog(this, HANDLER_PROGRESS_OUTPUT, "   Each . represents "
                << tick_len << " bytes of output" << std::endl
                << "    " << std::flush);
-  while (cmsysProcess_WaitForData(cp, &data, &length, CM_NULLPTR)) {
+  while (cmsysProcess_WaitForData(cp, &data, &length, nullptr)) {
     processOutput.DecodeText(data, length, strdata);
-    for (size_t cc = 0; cc < strdata.size(); ++cc) {
-      if (strdata[cc] == 0) {
-        strdata[cc] = '\n';
+    for (char& cc : strdata) {
+      if (cc == 0) {
+        cc = '\n';
       }
     }
     output.append(strdata);
@@ -1043,7 +1037,7 @@ int cmCTest::RunMakeCommand(const char* command, std::string& output,
   cmCTestLog(this, HANDLER_PROGRESS_OUTPUT, " Size of output: "
                << int(double(output.size()) / 1024.0) << "K" << std::endl);
 
-  cmsysProcess_WaitForExit(cp, CM_NULLPTR);
+  cmsysProcess_WaitForExit(cp, nullptr);
 
   int result = cmsysProcess_GetState(cp);
 
@@ -1076,26 +1070,33 @@ int cmCTest::RunMakeCommand(const char* command, std::string& output,
 //######################################################################
 
 int cmCTest::RunTest(std::vector<const char*> argv, std::string* output,
-                     int* retVal, std::ostream* log, double testTimeOut,
+                     int* retVal, std::ostream* log, cmDuration testTimeOut,
                      std::vector<std::string>* environment, Encoding encoding)
 {
   bool modifyEnv = (environment && !environment->empty());
 
   // determine how much time we have
-  double timeout = this->GetRemainingTimeAllowed() - 120;
-  if (this->TimeOut > 0 && this->TimeOut < timeout) {
+  cmDuration timeout = this->GetRemainingTimeAllowed();
+  if (timeout != cmCTest::MaxDuration()) {
+    timeout -= std::chrono::minutes(2);
+  }
+  if (this->TimeOut > cmDuration::zero() && this->TimeOut < timeout) {
     timeout = this->TimeOut;
   }
-  if (testTimeOut > 0 && testTimeOut < this->GetRemainingTimeAllowed()) {
+  if (testTimeOut > cmDuration::zero() &&
+      testTimeOut < this->GetRemainingTimeAllowed()) {
     timeout = testTimeOut;
   }
 
   // always have at least 1 second if we got to here
-  if (timeout <= 0) {
-    timeout = 1;
+  if (timeout <= cmDuration::zero()) {
+    timeout = std::chrono::seconds(1);
   }
-  cmCTestLog(this, HANDLER_VERBOSE_OUTPUT,
-             "Test timeout computed to be: " << timeout << "\n");
+  cmCTestLog(this, HANDLER_VERBOSE_OUTPUT, "Test timeout computed to be: "
+               << (timeout == cmCTest::MaxDuration()
+                     ? std::string("infinite")
+                     : std::to_string(cmDurationTo<unsigned int>(timeout)))
+               << "\n");
   if (cmSystemTools::SameFile(argv[0], cmSystemTools::GetCTestCommand()) &&
       !this->ForceNewCTestProcess) {
     cmCTest inst;
@@ -1107,27 +1108,29 @@ int cmCTest::RunTest(std::vector<const char*> argv, std::string* output,
     inst.SetStreams(&oss, &oss);
 
     std::vector<std::string> args;
-    for (unsigned int i = 0; i < argv.size(); ++i) {
-      if (argv[i]) {
+    for (char const* i : argv) {
+      if (i) {
         // make sure we pass the timeout in for any build and test
         // invocations. Since --build-generator is required this is a
         // good place to check for it, and to add the arguments in
-        if (strcmp(argv[i], "--build-generator") == 0 && timeout > 0) {
+        if (strcmp(i, "--build-generator") == 0 &&
+            timeout != cmCTest::MaxDuration() &&
+            timeout > cmDuration::zero()) {
           args.push_back("--test-timeout");
           std::ostringstream msg;
-          msg << timeout;
+          msg << cmDurationTo<unsigned int>(timeout);
           args.push_back(msg.str());
         }
-        args.push_back(argv[i]);
+        args.push_back(i);
       }
     }
     if (log) {
       *log << "* Run internal CTest" << std::endl;
     }
 
-    CM_AUTO_PTR<cmSystemTools::SaveRestoreEnvironment> saveEnv;
+    std::unique_ptr<cmSystemTools::SaveRestoreEnvironment> saveEnv;
     if (modifyEnv) {
-      saveEnv.reset(new cmSystemTools::SaveRestoreEnvironment);
+      saveEnv = cm::make_unique<cmSystemTools::SaveRestoreEnvironment>();
       cmSystemTools::AppendEnv(*environment);
     }
 
@@ -1149,12 +1152,12 @@ int cmCTest::RunTest(std::vector<const char*> argv, std::string* output,
   }
   std::vector<char> tempOutput;
   if (output) {
-    *output = "";
+    output->clear();
   }
 
-  CM_AUTO_PTR<cmSystemTools::SaveRestoreEnvironment> saveEnv;
+  std::unique_ptr<cmSystemTools::SaveRestoreEnvironment> saveEnv;
   if (modifyEnv) {
-    saveEnv.reset(new cmSystemTools::SaveRestoreEnvironment);
+    saveEnv = cm::make_unique<cmSystemTools::SaveRestoreEnvironment>();
     cmSystemTools::AppendEnv(*environment);
   }
 
@@ -1165,14 +1168,14 @@ int cmCTest::RunTest(std::vector<const char*> argv, std::string* output,
     cmsysProcess_SetOption(cp, cmsysProcess_Option_HideWindow, 1);
   }
 
-  cmsysProcess_SetTimeout(cp, timeout);
+  cmsysProcess_SetTimeout(cp, timeout.count());
   cmsysProcess_Execute(cp);
 
   char* data;
   int length;
   cmProcessOutput processOutput(encoding);
   std::string strdata;
-  while (cmsysProcess_WaitForData(cp, &data, &length, CM_NULLPTR)) {
+  while (cmsysProcess_WaitForData(cp, &data, &length, nullptr)) {
     processOutput.DecodeText(data, length, strdata);
     if (output) {
       tempOutput.insert(tempOutput.end(), data, data + length);
@@ -1192,7 +1195,7 @@ int cmCTest::RunTest(std::vector<const char*> argv, std::string* output,
     }
   }
 
-  cmsysProcess_WaitForExit(cp, CM_NULLPTR);
+  cmsysProcess_WaitForExit(cp, nullptr);
   processOutput.DecodeText(tempOutput, tempOutput);
   if (output && tempOutput.begin() != tempOutput.end()) {
     output->append(&*tempOutput.begin(), tempOutput.size());
@@ -1237,7 +1240,7 @@ std::string cmCTest::SafeBuildIdField(const std::string& value)
 {
   std::string safevalue(value);
 
-  if (safevalue != "") {
+  if (!safevalue.empty()) {
     // Disallow non-filename and non-space whitespace characters.
     // If they occur, replace them with ""
     //
@@ -1256,7 +1259,7 @@ std::string cmCTest::SafeBuildIdField(const std::string& value)
     }
   }
 
-  if (safevalue == "") {
+  if (safevalue.empty()) {
     safevalue = "(empty)";
   }
 
@@ -1348,9 +1351,8 @@ void cmCTest::AddSiteProperties(cmXMLWriter& xml)
       std::string l = labels;
       std::vector<std::string> args;
       cmSystemTools::ExpandListArgument(l, args);
-      for (std::vector<std::string>::iterator i = args.begin();
-           i != args.end(); ++i) {
-        xml.Element("Label", *i);
+      for (std::string const& i : args) {
+        xml.Element("Label", i);
       }
       xml.EndElement();
     }
@@ -1368,12 +1370,10 @@ void cmCTest::AddSiteProperties(cmXMLWriter& xml)
 
 void cmCTest::GenerateSubprojectsOutput(cmXMLWriter& xml)
 {
-  std::vector<std::string> subprojects = this->GetLabelsForSubprojects();
-  std::vector<std::string>::const_iterator i;
-  for (i = subprojects.begin(); i != subprojects.end(); ++i) {
+  for (std::string const& subproj : this->GetLabelsForSubprojects()) {
     xml.StartElement("Subproject");
-    xml.Attribute("name", *i);
-    xml.Element("Label", *i);
+    xml.Attribute("name", subproj);
+    xml.Element("Label", subproj);
     xml.EndElement(); // Subproject
   }
 }
@@ -1406,7 +1406,6 @@ int cmCTest::GenerateCTestNotesOutput(cmXMLWriter& xml,
 {
   std::string buildname =
     cmCTest::SafeBuildIdField(this->GetCTestConfiguration("BuildName"));
-  cmCTest::VectorOfStrings::const_iterator it;
   xml.StartDocument();
   xml.ProcessingInstruction("xml-stylesheet",
                             "type=\"text/xsl\" "
@@ -1422,15 +1421,15 @@ int cmCTest::GenerateCTestNotesOutput(cmXMLWriter& xml,
   this->AddSiteProperties(xml);
   xml.StartElement("Notes");
 
-  for (it = files.begin(); it != files.end(); it++) {
-    cmCTestLog(this, OUTPUT, "\tAdd file: " << *it << std::endl);
+  for (cmsys::String const& file : files) {
+    cmCTestLog(this, OUTPUT, "\tAdd file: " << file << std::endl);
     std::string note_time = this->CurrentTime();
     xml.StartElement("Note");
-    xml.Attribute("Name", *it);
-    xml.Element("Time", cmSystemTools::GetTime());
+    xml.Attribute("Name", file);
+    xml.Element("Time", std::chrono::system_clock::now());
     xml.Element("DateTime", note_time);
     xml.StartElement("Text");
-    cmsys::ifstream ifs(it->c_str());
+    cmsys::ifstream ifs(file.c_str());
     if (ifs) {
       std::string line;
       while (cmSystemTools::GetLineFromStream(ifs, line)) {
@@ -1439,9 +1438,9 @@ int cmCTest::GenerateCTestNotesOutput(cmXMLWriter& xml,
       }
       ifs.close();
     } else {
-      xml.Content("Problem reading file: " + *it + "\n");
+      xml.Content("Problem reading file: " + file + "\n");
       cmCTestLog(this, ERROR_MESSAGE, "Problem reading file: "
-                   << *it << " while creating notes" << std::endl);
+                   << file << " while creating notes" << std::endl);
     }
     xml.EndElement(); // Text
     xml.EndElement(); // Note
@@ -1523,14 +1522,13 @@ std::string cmCTest::Base64EncodeFile(std::string const& file)
 
 bool cmCTest::SubmitExtraFiles(const VectorOfStrings& files)
 {
-  VectorOfStrings::const_iterator it;
-  for (it = files.begin(); it != files.end(); ++it) {
-    if (!cmSystemTools::FileExists(it->c_str())) {
+  for (cmsys::String const& file : files) {
+    if (!cmSystemTools::FileExists(file)) {
       cmCTestLog(this, ERROR_MESSAGE, "Cannot find extra file: "
-                   << *it << " to submit." << std::endl;);
+                   << file << " to submit." << std::endl;);
       return false;
     }
-    this->AddSubmitFile(PartExtraFiles, it->c_str());
+    this->AddSubmitFile(PartExtraFiles, file.c_str());
   }
   return true;
 }
@@ -1767,7 +1765,7 @@ bool cmCTest::HandleCommandLineArguments(size_t& i,
 
   if (this->CheckArgument(arg, "--timeout") && i < args.size() - 1) {
     i++;
-    double timeout = (double)atof(args[i].c_str());
+    auto timeout = cmDuration(atof(args[i].c_str()));
     this->GlobalTimeout = timeout;
   }
 
@@ -1804,9 +1802,6 @@ bool cmCTest::HandleCommandLineArguments(size_t& i,
   }
   if (this->CheckArgument(arg, "-V", "--verbose")) {
     this->Verbose = true;
-  }
-  if (this->CheckArgument(arg, "-B")) {
-    this->BatchJobs = true;
   }
   if (this->CheckArgument(arg, "-VV", "--extra-verbose")) {
     this->ExtraVerbose = true;
@@ -2104,10 +2099,8 @@ int cmCTest::Run(std::vector<std::string>& args, std::string* output)
     // pass the argument to all the handlers as well, but i may no longer be
     // set to what it was originally so I'm not sure this is working as
     // intended
-    cmCTest::t_TestingHandlers::iterator it;
-    for (it = this->TestingHandlers.begin(); it != this->TestingHandlers.end();
-         ++it) {
-      if (!it->second->ProcessCommandLineArguments(arg, i, args)) {
+    for (auto& handler : this->TestingHandlers) {
+      if (!handler.second->ProcessCommandLineArguments(arg, i, args)) {
         cmCTestLog(this, ERROR_MESSAGE,
                    "Problem parsing command line arguments within a handler");
         return 0;
@@ -2204,11 +2197,9 @@ int cmCTest::ExecuteTests()
     if (this->ExtraVerbose) {
       cmCTestLog(this, OUTPUT, "* Extra verbosity turned on" << std::endl);
     }
-    cmCTest::t_TestingHandlers::iterator it;
-    for (it = this->TestingHandlers.begin(); it != this->TestingHandlers.end();
-         ++it) {
-      it->second->SetVerbose(this->ExtraVerbose);
-      it->second->SetSubmitIndex(this->SubmitIndex);
+    for (auto& handler : this->TestingHandlers) {
+      handler.second->SetVerbose(this->ExtraVerbose);
+      handler.second->SetSubmitIndex(this->SubmitIndex);
     }
     this->GetHandler("script")->SetVerbose(this->Verbose);
     res = this->GetHandler("script")->ProcessHandler();
@@ -2222,14 +2213,12 @@ int cmCTest::ExecuteTests()
     // and Verbose is always on in this case
     this->ExtraVerbose = this->Verbose;
     this->Verbose = true;
-    cmCTest::t_TestingHandlers::iterator it;
-    for (it = this->TestingHandlers.begin(); it != this->TestingHandlers.end();
-         ++it) {
-      it->second->SetVerbose(this->Verbose);
-      it->second->SetSubmitIndex(this->SubmitIndex);
+    for (auto& handler : this->TestingHandlers) {
+      handler.second->SetVerbose(this->Verbose);
+      handler.second->SetSubmitIndex(this->SubmitIndex);
     }
     std::string cwd = cmSystemTools::GetCurrentWorkingDirectory();
-    if (!this->Initialize(cwd.c_str(), CM_NULLPTR)) {
+    if (!this->Initialize(cwd.c_str(), nullptr)) {
       res = 12;
       cmCTestLog(this, ERROR_MESSAGE, "Problem initializing the dashboard."
                    << std::endl);
@@ -2270,10 +2259,41 @@ void cmCTest::SetNotesFiles(const char* notes)
   this->NotesFiles = notes;
 }
 
-void cmCTest::SetStopTime(std::string const& time)
+void cmCTest::SetStopTime(std::string const& time_str)
 {
-  this->StopTime = time;
-  this->DetermineNextDayStop();
+
+  struct tm* lctime;
+  time_t current_time = time(nullptr);
+  lctime = gmtime(&current_time);
+  int gm_hour = lctime->tm_hour;
+  time_t gm_time = mktime(lctime);
+  lctime = localtime(&current_time);
+  int local_hour = lctime->tm_hour;
+
+  int tzone_offset = local_hour - gm_hour;
+  if (gm_time > current_time && gm_hour < local_hour) {
+    // this means gm_time is on the next day
+    tzone_offset -= 24;
+  } else if (gm_time < current_time && gm_hour > local_hour) {
+    // this means gm_time is on the previous day
+    tzone_offset += 24;
+  }
+
+  tzone_offset *= 100;
+  char buf[1024];
+  sprintf(buf, "%d%02d%02d %s %+05i", lctime->tm_year + 1900,
+          lctime->tm_mon + 1, lctime->tm_mday, time_str.c_str(), tzone_offset);
+
+  time_t stop_time = curl_getdate(buf, &current_time);
+  if (stop_time == -1) {
+    this->StopTime = std::chrono::system_clock::time_point();
+    return;
+  }
+  this->StopTime = std::chrono::system_clock::from_time_t(stop_time);
+
+  if (stop_time < current_time) {
+    this->StopTime += std::chrono::hours(24);
+  }
 }
 
 int cmCTest::ReadCustomConfigurationFileTree(const char* dir, cmMakefile* mf)
@@ -2287,7 +2307,7 @@ int cmCTest::ReadCustomConfigurationFileTree(const char* dir, cmMakefile* mf)
   std::string fname = dir;
   fname += "/CTestCustom.cmake";
   cmCTestLog(this, DEBUG, "* Check for file: " << fname << std::endl);
-  if (cmSystemTools::FileExists(fname.c_str())) {
+  if (cmSystemTools::FileExists(fname)) {
     cmCTestLog(this, DEBUG, "* Read custom CTest configuration file: "
                  << fname << std::endl);
     bool erroroc = cmSystemTools::GetErrorOccuredFlag();
@@ -2307,7 +2327,7 @@ int cmCTest::ReadCustomConfigurationFileTree(const char* dir, cmMakefile* mf)
   std::string rexpr = dir;
   rexpr += "/CTestCustom.ctest";
   cmCTestLog(this, DEBUG, "* Check for file: " << rexpr << std::endl);
-  if (!found && cmSystemTools::FileExists(rexpr.c_str())) {
+  if (!found && cmSystemTools::FileExists(rexpr)) {
     cmsys::Glob gl;
     gl.RecurseOn();
     gl.FindFiles(rexpr);
@@ -2327,13 +2347,11 @@ int cmCTest::ReadCustomConfigurationFileTree(const char* dir, cmMakefile* mf)
   }
 
   if (found) {
-    cmCTest::t_TestingHandlers::iterator it;
-    for (it = this->TestingHandlers.begin(); it != this->TestingHandlers.end();
-         ++it) {
-      cmCTestLog(this, DEBUG,
-                 "* Read custom CTest configuration vectors for handler: "
-                   << it->first << " (" << it->second << ")" << std::endl);
-      it->second->PopulateCustomVectors(mf);
+    for (auto& handler : this->TestingHandlers) {
+      cmCTestLog(
+        this, DEBUG, "* Read custom CTest configuration vectors for handler: "
+          << handler.first << " (" << handler.second << ")" << std::endl);
+      handler.second->PopulateCustomVectors(mf);
     }
   }
 
@@ -2352,9 +2370,8 @@ void cmCTest::PopulateCustomVector(cmMakefile* mf, const std::string& def,
   vec.clear();
   cmSystemTools::ExpandListArgument(dval, vec);
 
-  for (std::vector<std::string>::const_iterator it = vec.begin();
-       it != vec.end(); ++it) {
-    cmCTestLog(this, DEBUG, "  -- " << *it << std::endl);
+  for (std::string const& it : vec) {
+    cmCTestLog(this, DEBUG, "  -- " << it << std::endl);
   }
 }
 
@@ -2377,17 +2394,15 @@ std::string cmCTest::GetShortPathToFile(const char* cfname)
   std::string fname = cmSystemTools::CollapseFullPath(cfname);
 
   // Find relative paths to both directories
-  std::string srcRelpath =
-    cmSystemTools::RelativePath(sourceDir.c_str(), fname.c_str());
-  std::string bldRelpath =
-    cmSystemTools::RelativePath(buildDir.c_str(), fname.c_str());
+  std::string srcRelpath = cmSystemTools::RelativePath(sourceDir, fname);
+  std::string bldRelpath = cmSystemTools::RelativePath(buildDir, fname);
 
   // If any contains "." it is not parent directory
   bool inSrc = srcRelpath.find("..") == std::string::npos;
   bool inBld = bldRelpath.find("..") == std::string::npos;
   // TODO: Handle files with .. in their name
 
-  std::string* res = CM_NULLPTR;
+  std::string* res = nullptr;
 
   if (inSrc && inBld) {
     // If both have relative path with no dots, pick the shorter one
@@ -2432,38 +2447,6 @@ std::string cmCTest::GetCTestConfiguration(const std::string& name)
 void cmCTest::EmptyCTestConfiguration()
 {
   this->CTestConfiguration.clear();
-}
-
-void cmCTest::DetermineNextDayStop()
-{
-  struct tm* lctime;
-  time_t current_time = time(CM_NULLPTR);
-  lctime = gmtime(&current_time);
-  int gm_hour = lctime->tm_hour;
-  time_t gm_time = mktime(lctime);
-  lctime = localtime(&current_time);
-  int local_hour = lctime->tm_hour;
-
-  int tzone_offset = local_hour - gm_hour;
-  if (gm_time > current_time && gm_hour < local_hour) {
-    // this means gm_time is on the next day
-    tzone_offset -= 24;
-  } else if (gm_time < current_time && gm_hour > local_hour) {
-    // this means gm_time is on the previous day
-    tzone_offset += 24;
-  }
-
-  tzone_offset *= 100;
-  char buf[1024];
-  sprintf(buf, "%d%02d%02d %s %+05i", lctime->tm_year + 1900,
-          lctime->tm_mon + 1, lctime->tm_mday, this->StopTime.c_str(),
-          tzone_offset);
-
-  time_t stop_time = curl_getdate(buf, &current_time);
-
-  if (stop_time < current_time) {
-    this->NextDayStopTime = true;
-  }
 }
 
 void cmCTest::SetCTestConfiguration(const char* name, const char* value,
@@ -2521,7 +2504,7 @@ bool cmCTest::GetProduceXML()
 const char* cmCTest::GetSpecificTrack()
 {
   if (this->SpecificTrack.empty()) {
-    return CM_NULLPTR;
+    return nullptr;
   }
   return this->SpecificTrack.c_str();
 }
@@ -2529,7 +2512,7 @@ const char* cmCTest::GetSpecificTrack()
 void cmCTest::SetSpecificTrack(const char* track)
 {
   if (!track) {
-    this->SpecificTrack = "";
+    this->SpecificTrack.clear();
     return;
   }
   this->SpecificTrack = track;
@@ -2581,25 +2564,20 @@ bool cmCTest::SetCTestConfigurationFromCMakeVariable(
   return true;
 }
 
-bool cmCTest::RunCommand(const char* command, std::string* stdOut,
-                         std::string* stdErr, int* retVal, const char* dir,
-                         double timeout, Encoding encoding)
+bool cmCTest::RunCommand(std::vector<std::string> const& args,
+                         std::string* stdOut, std::string* stdErr, int* retVal,
+                         const char* dir, cmDuration timeout,
+                         Encoding encoding)
 {
-  std::vector<std::string> args = cmSystemTools::ParseArguments(command);
-
-  if (args.empty()) {
-    return false;
-  }
-
   std::vector<const char*> argv;
-  for (std::vector<std::string>::const_iterator a = args.begin();
-       a != args.end(); ++a) {
-    argv.push_back(a->c_str());
+  argv.reserve(args.size() + 1);
+  for (std::string const& a : args) {
+    argv.push_back(a.c_str());
   }
-  argv.push_back(CM_NULLPTR);
+  argv.push_back(nullptr);
 
-  *stdOut = "";
-  *stdErr = "";
+  stdOut->clear();
+  stdErr->clear();
 
   cmsysProcess* cp = cmsysProcess_New();
   cmsysProcess_SetCommand(cp, &*argv.begin());
@@ -2607,7 +2585,7 @@ bool cmCTest::RunCommand(const char* command, std::string* stdOut,
   if (cmSystemTools::GetRunCommandHideConsole()) {
     cmsysProcess_SetOption(cp, cmsysProcess_Option_HideWindow, 1);
   }
-  cmsysProcess_SetTimeout(cp, timeout);
+  cmsysProcess_SetTimeout(cp, timeout.count());
   cmsysProcess_Execute(cp);
 
   std::vector<char> tempOutput;
@@ -2619,7 +2597,7 @@ bool cmCTest::RunCommand(const char* command, std::string* stdOut,
   int res;
   bool done = false;
   while (!done) {
-    res = cmsysProcess_WaitForData(cp, &data, &length, CM_NULLPTR);
+    res = cmsysProcess_WaitForData(cp, &data, &length, nullptr);
     switch (res) {
       case cmsysProcess_Pipe_STDOUT:
         tempOutput.insert(tempOutput.end(), data, data + length);
@@ -2643,7 +2621,7 @@ bool cmCTest::RunCommand(const char* command, std::string* stdOut,
     }
   }
 
-  cmsysProcess_WaitForExit(cp, CM_NULLPTR);
+  cmsysProcess_WaitForExit(cp, nullptr);
   if (!tempOutput.empty()) {
     processOutput.DecodeText(tempOutput, tempOutput);
     stdOut->append(&*tempOutput.begin(), tempOutput.size());
@@ -2687,7 +2665,7 @@ void cmCTest::SetOutputLogFileName(const char* name)
 {
   if (this->OutputLogFile) {
     delete this->OutputLogFile;
-    this->OutputLogFile = CM_NULLPTR;
+    this->OutputLogFile = nullptr;
   }
   if (name) {
     this->OutputLogFile = new cmGeneratedFileStream(name);
@@ -2701,7 +2679,7 @@ static const char* cmCTestStringLogType[] = { "DEBUG",
                                               "HANDLER_VERBOSE_OUTPUT",
                                               "WARNING",
                                               "ERROR_MESSAGE",
-                                              CM_NULLPTR };
+                                              nullptr };
 
 #define cmCTestLogOutputFileLine(stream)                                      \
   if (this->ShowLineNumbers) {                                                \
@@ -2800,16 +2778,29 @@ void cmCTest::Log(int logType, const char* file, int line, const char* msg,
   }
 }
 
-double cmCTest::GetRemainingTimeAllowed()
+cmDuration cmCTest::GetRemainingTimeAllowed()
 {
   if (!this->GetHandler("script")) {
-    return 1.0e7;
+    return cmCTest::MaxDuration();
   }
 
   cmCTestScriptHandler* ch =
     static_cast<cmCTestScriptHandler*>(this->GetHandler("script"));
 
   return ch->GetRemainingTimeAllowed();
+}
+
+cmDuration cmCTest::MaxDuration()
+{
+  return cmDuration(1.0e7);
+}
+
+void cmCTest::SetRunCurrentScript(bool value)
+{
+  cmCTestScriptHandler* ch =
+    static_cast<cmCTestScriptHandler*>(this->GetHandler("script"));
+
+  ch->SetRunCurrentScript(value);
 }
 
 void cmCTest::OutputTestErrors(std::vector<char> const& process_output)

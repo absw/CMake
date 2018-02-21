@@ -2,7 +2,7 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #pragma once
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include "cm_jsoncpp_value.h"
 #include "cmake.h"
@@ -123,6 +123,7 @@ private:
   cmServerResponse ProcessGlobalSettings(const cmServerRequest& request);
   cmServerResponse ProcessSetGlobalSettings(const cmServerRequest& request);
   cmServerResponse ProcessFileSystemWatchers(const cmServerRequest& request);
+  cmServerResponse ProcessCTests(const cmServerRequest& request);
 
   enum State
   {

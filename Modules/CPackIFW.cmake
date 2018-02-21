@@ -191,6 +191,12 @@
 #
 #  By default used QtIFW_ defaults (``maintenancetool``).
 #
+# .. variable:: CPACK_IFW_PACKAGE_REMOVE_TARGET_DIR
+#
+#  Set to ``OFF`` if the target directory should not be deleted when uninstalling.
+#
+#  Is ``ON`` by default
+#
 # .. variable:: CPACK_IFW_PACKAGE_MAINTENANCE_TOOL_INI_FILE
 #
 #  Filename for the configuration of the generated maintenance tool.
@@ -221,6 +227,19 @@
 #  You can use :command:`cpack_ifw_add_package_resources` command to resolve
 #  relative paths.
 #
+# .. variable:: CPACK_IFW_PACKAGE_FILE_EXTENSION
+#
+#  The target binary extension.
+#
+#  On Linux, the name of the target binary is automatically extended with
+#  '.run', if you do not specify the extension.
+#
+#  On Windows, the target is created as an application with the extension
+#  '.exe', which is automatically added, if not supplied.
+#
+#  On Mac, the target is created as an DMG disk image with the extension
+#  '.dmg', which is automatically added, if not supplied.
+#
 # .. variable:: CPACK_IFW_REPOSITORIES_ALL
 #
 #  The list of remote repositories.
@@ -246,6 +265,12 @@
 #
 #  Additional prepared packages dirs that will be used to resolve
 #  dependent components.
+#
+# .. variable:: CPACK_IFW_REPOSITORIES_DIRECTORIES
+#
+#  Additional prepared repository dirs that will be used to resolve and
+#  repack dependent components. This feature available only
+#  since QtIFW_ 3.1.
 #
 # Tools
 # """""
@@ -304,7 +329,9 @@
 #                         [LICENSES <display_name> <file_path> ...]
 #                         [DEFAULT <value>]
 #                         [USER_INTERFACES <file_path> <file_path> ...]
-#                         [TRANSLATIONS <file_path> <file_path> ...])
+#                         [TRANSLATIONS <file_path> <file_path> ...]
+#                         [REPLACES <comp_id> ...]
+#                         [CHECKABLE <value>])
 #
 #   This command should be called after :command:`cpack_add_component` command.
 #
@@ -385,6 +412,15 @@
 #   ``TRANSLATIONS``
 #     is a list of <file_path> ('.qm' files) representing translations to load.
 #
+#   ``REPLACES``
+#     list of identifiers of component or component group to replace.
+#
+#   ``CHECKABLE``
+#     Possible values are: TRUE, FALSE.
+#     Set to FALSE if you want to hide the checkbox for an item.
+#     This is useful when only a few subcomponents should be selected
+#     instead of all.
+#
 #
 # .. command:: cpack_ifw_configure_component_group
 #
@@ -407,7 +443,9 @@
 #                         [LICENSES <display_name> <file_path> ...]
 #                         [DEFAULT <value>]
 #                         [USER_INTERFACES <file_path> <file_path> ...]
-#                         [TRANSLATIONS <file_path> <file_path> ...])
+#                         [TRANSLATIONS <file_path> <file_path> ...]
+#                         [REPLACES <comp_id> ...]
+#                         [CHECKABLE <value>])
 #
 #   This command should be called after :command:`cpack_add_component_group`
 #   command.
@@ -479,6 +517,15 @@
 #
 #   ``TRANSLATIONS``
 #     is a list of <file_path> ('.qm' files) representing translations to load.
+#
+#   ``REPLACES``
+#     list of identifiers of component or component group to replace.
+#
+#   ``CHECKABLE``
+#     Possible values are: TRUE, FALSE.
+#     Set to FALSE if you want to hide the checkbox for an item.
+#     This is useful when only a few subcomponents should be selected
+#     instead of all.
 #
 #
 # .. command:: cpack_ifw_add_repository
@@ -776,7 +823,7 @@ if(CPACK_IFW_INSTALLERBASE_EXECUTABLE AND NOT CPACK_IFW_FRAMEWORK_VERSION_FORCED
       endif()
     endif()
   endforeach()
-  # Finaly try to get version from executable path
+  # Finally try to get version from executable path
   if(NOT CPACK_IFW_FRAMEWORK_VERSION)
     string(REGEX MATCH "[0-9]+(\\.[0-9]+)*"
       CPACK_IFW_FRAMEWORK_VERSION "${CPACK_IFW_INSTALLERBASE_EXECUTABLE}")
@@ -796,7 +843,7 @@ if(CPACK_IFW_VERBOSE)
   endif()
 endif()
 if(CPACK_IFW_INSTALLERBASE_EXECUTABLE AND NOT CPACK_IFW_FRAMEWORK_VERSION)
-  message(WARNING "Could not detect QtIFW tools version. Set used version to variable \"CPACK_IFW_FRAMEWORK_VERSION_FORCED\" manualy.")
+  message(WARNING "Could not detect QtIFW tools version. Set used version to variable \"CPACK_IFW_FRAMEWORK_VERSION_FORCED\" manually.")
 endif()
 
 #=============================================================================
@@ -823,7 +870,7 @@ macro(_cpack_ifw_resolve_script _variable)
   endif()
 endmacro()
 
-# Resolve full path to lisense file
+# Resolve full path to license file
 macro(_cpack_ifw_resolve_lisenses _variable)
   if(${_variable})
     set(_ifw_license_file FALSE)
@@ -863,8 +910,8 @@ macro(cpack_ifw_configure_component compname)
   string(TOUPPER ${compname} _CPACK_IFWCOMP_UNAME)
 
   set(_IFW_OPT COMMON ESSENTIAL VIRTUAL FORCED_INSTALLATION REQUIRES_ADMIN_RIGHTS)
-  set(_IFW_ARGS NAME VERSION RELEASE_DATE SCRIPT PRIORITY SORTING_PRIORITY UPDATE_TEXT DEFAULT)
-  set(_IFW_MULTI_ARGS DISPLAY_NAME DESCRIPTION DEPENDS DEPENDENCIES AUTO_DEPEND_ON LICENSES USER_INTERFACES TRANSLATIONS)
+  set(_IFW_ARGS NAME VERSION RELEASE_DATE SCRIPT PRIORITY SORTING_PRIORITY UPDATE_TEXT DEFAULT CHECKABLE)
+  set(_IFW_MULTI_ARGS DISPLAY_NAME DESCRIPTION DEPENDS DEPENDENCIES AUTO_DEPEND_ON LICENSES USER_INTERFACES TRANSLATIONS REPLACES)
   cmake_parse_arguments(CPACK_IFW_COMPONENT_${_CPACK_IFWCOMP_UNAME} "${_IFW_OPT}" "${_IFW_ARGS}" "${_IFW_MULTI_ARGS}" ${ARGN})
 
   _cpack_ifw_resolve_script(CPACK_IFW_COMPONENT_${_CPACK_IFWCOMP_UNAME}_SCRIPT)
@@ -904,8 +951,8 @@ macro(cpack_ifw_configure_component_group grpname)
   string(TOUPPER ${grpname} _CPACK_IFWGRP_UNAME)
 
   set(_IFW_OPT VIRTUAL FORCED_INSTALLATION REQUIRES_ADMIN_RIGHTS)
-  set(_IFW_ARGS NAME VERSION RELEASE_DATE SCRIPT PRIORITY SORTING_PRIORITY UPDATE_TEXT DEFAULT)
-  set(_IFW_MULTI_ARGS DISPLAY_NAME DESCRIPTION DEPENDS DEPENDENCIES AUTO_DEPEND_ON LICENSES USER_INTERFACES TRANSLATIONS)
+  set(_IFW_ARGS NAME VERSION RELEASE_DATE SCRIPT PRIORITY SORTING_PRIORITY UPDATE_TEXT DEFAULT CHECKABLE)
+  set(_IFW_MULTI_ARGS DISPLAY_NAME DESCRIPTION DEPENDS DEPENDENCIES AUTO_DEPEND_ON LICENSES USER_INTERFACES TRANSLATIONS REPLACES)
   cmake_parse_arguments(CPACK_IFW_COMPONENT_GROUP_${_CPACK_IFWGRP_UNAME} "${_IFW_OPT}" "${_IFW_ARGS}" "${_IFW_MULTI_ARGS}" ${ARGN})
 
   _cpack_ifw_resolve_script(CPACK_IFW_COMPONENT_GROUP_${_CPACK_IFWGRP_UNAME}_SCRIPT)

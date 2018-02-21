@@ -4,6 +4,7 @@
 
 #include "cmsys/RegularExpression.hxx"
 #include <ctype.h>
+#include <memory> // IWYU pragma: keep
 #include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +16,6 @@
 #include "cmSystemTools.h"
 #include "cmTimestamp.h"
 #include "cmUuid.h"
-#include "cm_auto_ptr.hxx"
 
 class cmExecutionStatus;
 
@@ -62,8 +62,14 @@ bool cmStringCommand::InitialPass(std::vector<std::string> const& args,
   if (subCommand == "APPEND") {
     return this->HandleAppendCommand(args);
   }
+  if (subCommand == "PREPEND") {
+    return this->HandlePrependCommand(args);
+  }
   if (subCommand == "CONCAT") {
     return this->HandleConcatCommand(args);
+  }
+  if (subCommand == "JOIN") {
+    return this->HandleJoinCommand(args);
   }
   if (subCommand == "SUBSTRING") {
     return this->HandleSubstringCommand(args);
@@ -105,8 +111,8 @@ bool cmStringCommand::HandleHashCommand(std::vector<std::string> const& args)
     return false;
   }
 
-  CM_AUTO_PTR<cmCryptoHash> hash(cmCryptoHash::New(args[0].c_str()));
-  if (hash.get()) {
+  std::unique_ptr<cmCryptoHash> hash(cmCryptoHash::New(args[0].c_str()));
+  if (hash) {
     std::string out = hash->HashString(args[2]);
     this->Makefile->AddDefinition(args[1], out.c_str());
     return true;
@@ -409,13 +415,13 @@ bool cmStringCommand::RegexReplace(std::vector<std::string> const& args)
     }
 
     // Concatenate the replacement for the match.
-    for (unsigned int i = 0; i < replacement.size(); ++i) {
-      if (replacement[i].number < 0) {
+    for (RegexReplacement const& i : replacement) {
+      if (i.number < 0) {
         // This is just a plain-text part of the replacement.
-        output += replacement[i].value;
+        output += i.value;
       } else {
         // Replace with part of the match.
-        int n = replacement[i].number;
+        int n = i.number;
         std::string::size_type start = re.start(n);
         std::string::size_type end = re.end(n);
         std::string::size_type len = input.length() - base;
@@ -643,6 +649,30 @@ bool cmStringCommand::HandleAppendCommand(std::vector<std::string> const& args)
   return true;
 }
 
+bool cmStringCommand::HandlePrependCommand(
+  std::vector<std::string> const& args)
+{
+  if (args.size() < 2) {
+    this->SetError("sub-command PREPEND requires at least one argument.");
+    return false;
+  }
+
+  // Skip if nothing to prepend.
+  if (args.size() < 3) {
+    return true;
+  }
+
+  const std::string& variable = args[1];
+
+  std::string value = cmJoin(cmMakeRange(args).advance(2), std::string());
+  const char* oldValue = this->Makefile->GetDefinition(variable);
+  if (oldValue) {
+    value += oldValue;
+  }
+  this->Makefile->AddDefinition(variable, value.c_str());
+  return true;
+}
+
 bool cmStringCommand::HandleConcatCommand(std::vector<std::string> const& args)
 {
   if (args.size() < 2) {
@@ -650,8 +680,26 @@ bool cmStringCommand::HandleConcatCommand(std::vector<std::string> const& args)
     return false;
   }
 
-  std::string const& variableName = args[1];
-  std::string value = cmJoin(cmMakeRange(args).advance(2), std::string());
+  return this->joinImpl(args, std::string(), 1);
+}
+
+bool cmStringCommand::HandleJoinCommand(std::vector<std::string> const& args)
+{
+  if (args.size() < 3) {
+    this->SetError("sub-command JOIN requires at least two arguments.");
+    return false;
+  }
+
+  return this->joinImpl(args, args[1], 2);
+}
+
+bool cmStringCommand::joinImpl(std::vector<std::string> const& args,
+                               std::string const& glue, const size_t varIdx)
+{
+  std::string const& variableName = args[varIdx];
+  // NOTE Items to concat/join placed right after the variable for
+  // both `CONCAT` and `JOIN` sub-commands.
+  std::string value = cmJoin(cmMakeRange(args).advance(varIdx + 1), glue);
 
   this->Makefile->AddDefinition(variableName, value.c_str());
   return true;
@@ -791,7 +839,7 @@ bool cmStringCommand::HandleRandomCommand(std::vector<std::string> const& args)
   const char* alphaPtr = alphabet.c_str();
   int cc;
   for (cc = 0; cc < length; cc++) {
-    int idx = (int)(sizeofAlphabet * rand() / (RAND_MAX + 1.0));
+    int idx = static_cast<int>(sizeofAlphabet * rand() / (RAND_MAX + 1.0));
     result.push_back(*(alphaPtr + idx));
   }
   result.push_back(0);

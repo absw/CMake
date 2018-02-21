@@ -29,23 +29,8 @@ static std::string cmVisualStudioGeneratorOptionsEscapeForXML(std::string ret)
 cmVisualStudioGeneratorOptions::cmVisualStudioGeneratorOptions(
   cmLocalVisualStudioGenerator* lg, Tool tool,
   cmVisualStudio10TargetGenerator* g)
-  : cmIDEOptions()
-  , LocalGenerator(lg)
-  , Version(lg->GetVersion())
-  , CurrentTool(tool)
-  , TargetGenerator(g)
+  : cmVisualStudioGeneratorOptions(lg, tool, nullptr, nullptr, g)
 {
-  // Preprocessor definitions are not allowed for linker tools.
-  this->AllowDefine = (tool != Linker);
-
-  // Slash options are allowed for VS.
-  this->AllowSlash = true;
-
-  this->FortranRuntimeDebug = false;
-  this->FortranRuntimeDLL = false;
-  this->FortranRuntimeMT = false;
-
-  this->UnknownFlagField = "AdditionalOptions";
 }
 
 cmVisualStudioGeneratorOptions::cmVisualStudioGeneratorOptions(
@@ -63,6 +48,9 @@ cmVisualStudioGeneratorOptions::cmVisualStudioGeneratorOptions(
 
   // Preprocessor definitions are not allowed for linker tools.
   this->AllowDefine = (tool != Linker);
+
+  // include directories are not allowed for linker tools.
+  this->AllowInclude = (tool != Linker);
 
   // Slash options are allowed for VS.
   this->AllowSlash = true;
@@ -89,7 +77,7 @@ void cmVisualStudioGeneratorOptions::AddTable(cmVS7FlagTable const* table)
 void cmVisualStudioGeneratorOptions::ClearTables()
 {
   for (int i = 0; i < FlagTableCount; ++i) {
-    this->FlagTable[i] = CM_NULLPTR;
+    this->FlagTable[i] = nullptr;
   }
 }
 
@@ -239,21 +227,100 @@ void cmVisualStudioGeneratorOptions::FixCudaCodeGeneration()
       // It translates to -arch=<virtual> -code=<real>.
       cmSystemTools::ReplaceString(arch_name, "sm_", "compute_");
     }
-    for (std::vector<std::string>::iterator ci = codes.begin();
-         ci != codes.end(); ++ci) {
-      std::string entry = arch_name + "," + *ci;
+    for (auto const& c : codes) {
+      std::string entry = arch_name + "," + c;
       result.push_back(entry);
     }
   }
 
-  // Now add entries for the -gencode=<arch>,<code> pairs.
-  for (std::vector<std::string>::iterator ei = gencode.begin();
-       ei != gencode.end(); ++ei) {
-    std::string entry = *ei;
+  // Now add entries for the following signatures:
+  // -gencode=<arch>,<code>
+  // -gencode=<arch>,[<code1>,<code2>]
+  // -gencode=<arch>,"<code1>,<code2>"
+  for (auto const& e : gencode) {
+    std::string entry = e;
     cmSystemTools::ReplaceString(entry, "arch=", "");
     cmSystemTools::ReplaceString(entry, "code=", "");
-    result.push_back(entry);
+    cmSystemTools::ReplaceString(entry, "[", "");
+    cmSystemTools::ReplaceString(entry, "]", "");
+    cmSystemTools::ReplaceString(entry, "\"", "");
+
+    std::vector<std::string> codes = cmSystemTools::tokenize(entry, ",");
+    if (codes.size() >= 2) {
+      auto gencode_arch = cm::cbegin(codes);
+      for (auto ci = gencode_arch + 1; ci != cm::cend(codes); ++ci) {
+        std::string code_entry = *gencode_arch + "," + *ci;
+        result.push_back(code_entry);
+      }
+    }
   }
+}
+
+void cmVisualStudioGeneratorOptions::FixManifestUACFlags()
+{
+  static std::string const ENABLE_UAC = "EnableUAC";
+  if (!HasFlag(ENABLE_UAC)) {
+    return;
+  }
+
+  const std::string uacFlag = GetFlag(ENABLE_UAC);
+  std::vector<std::string> subOptions;
+  cmsys::SystemTools::Split(uacFlag, subOptions, ' ');
+  if (subOptions.empty()) {
+    AddFlag(ENABLE_UAC, "true");
+    return;
+  }
+
+  if (subOptions.size() == 1 && subOptions[0] == "NO") {
+    AddFlag(ENABLE_UAC, "false");
+    return;
+  }
+
+  std::map<std::string, std::string> uacMap;
+  uacMap["level"] = "UACExecutionLevel";
+  uacMap["uiAccess"] = "UACUIAccess";
+
+  std::map<std::string, std::string> uacExecuteLevelMap;
+  uacExecuteLevelMap["asInvoker"] = "AsInvoker";
+  uacExecuteLevelMap["highestAvailable"] = "HighestAvailable";
+  uacExecuteLevelMap["requireAdministrator"] = "RequireAdministrator";
+
+  for (auto const& subopt : subOptions) {
+    std::vector<std::string> keyValue;
+    cmsys::SystemTools::Split(subopt, keyValue, '=');
+    if (keyValue.size() != 2 || (uacMap.find(keyValue[0]) == uacMap.end())) {
+      // ignore none key=value option or unknown flags
+      continue;
+    }
+
+    if (keyValue[1].front() == '\'' && keyValue[1].back() == '\'') {
+      keyValue[1] =
+        keyValue[1].substr(1, std::max<int>(0, keyValue[1].size() - 2));
+    }
+
+    if (keyValue[0] == "level") {
+      if (uacExecuteLevelMap.find(keyValue[1]) == uacExecuteLevelMap.end()) {
+        // unknown level value
+        continue;
+      }
+
+      AddFlag(uacMap[keyValue[0]], uacExecuteLevelMap[keyValue[1]]);
+      continue;
+    }
+
+    if (keyValue[0] == "uiAccess") {
+      if (keyValue[1] != "true" && keyValue[1] != "false") {
+        // unknown uiAccess value
+        continue;
+      }
+      AddFlag(uacMap[keyValue[0]], keyValue[1]);
+      continue;
+    }
+
+    // unknown sub option
+  }
+
+  AddFlag(ENABLE_UAC, "true");
 }
 
 void cmVisualStudioGeneratorOptions::Parse(const char* flags)
@@ -427,6 +494,69 @@ void cmVisualStudioGeneratorOptions::OutputPreprocessorDefinitions(
   }
   if (this->Version >= cmGlobalVisualStudioGenerator::VS10) {
     fout << ";%(" << tag << ")</" << tag << ">" << suffix;
+  } else {
+    fout << "\"" << suffix;
+  }
+}
+
+void cmVisualStudioGeneratorOptions::OutputAdditionalIncludeDirectories(
+  std::ostream& fout, const char* prefix, const char* suffix,
+  const std::string& lang)
+{
+  if (this->Includes.empty()) {
+    return;
+  }
+
+  const char* tag = "AdditionalIncludeDirectories";
+  if (lang == "CUDA") {
+    tag = "Include";
+  } else if (lang == "ASM_MASM" || lang == "ASM_NASM") {
+    tag = "IncludePaths";
+  }
+
+  if (this->Version >= cmGlobalVisualStudioGenerator::VS10) {
+    // if there are configuration specific flags, then
+    // use the configuration specific tag for PreprocessorDefinitions
+    if (!this->Configuration.empty()) {
+      fout << prefix;
+      this->TargetGenerator->WritePlatformConfigTag(
+        tag, this->Configuration.c_str(), 0, 0, 0, &fout);
+    } else {
+      fout << prefix << "<" << tag << ">";
+    }
+  } else {
+    fout << prefix << tag << "=\"";
+  }
+
+  const char* sep = "";
+  for (std::string include : this->Includes) {
+    // first convert all of the slashes
+    std::string::size_type pos = 0;
+    while ((pos = include.find('/', pos)) != std::string::npos) {
+      include[pos] = '\\';
+      pos++;
+    }
+
+    if (lang == "ASM_NASM") {
+      include += "\\";
+    }
+
+    // Escape this include for the IDE.
+    fout << sep << (this->Version >= cmGlobalVisualStudioGenerator::VS10
+                      ? cmVisualStudio10GeneratorOptionsEscapeForXML(include)
+                      : cmVisualStudioGeneratorOptionsEscapeForXML(include));
+    sep = ";";
+
+    if (lang == "Fortran") {
+      include += "/$(ConfigurationName)";
+      fout << sep << (this->Version >= cmGlobalVisualStudioGenerator::VS10
+                        ? cmVisualStudio10GeneratorOptionsEscapeForXML(include)
+                        : cmVisualStudioGeneratorOptionsEscapeForXML(include));
+    }
+  }
+
+  if (this->Version >= cmGlobalVisualStudioGenerator::VS10) {
+    fout << sep << "%(" << tag << ")</" << tag << ">" << suffix;
   } else {
     fout << "\"" << suffix;
   }

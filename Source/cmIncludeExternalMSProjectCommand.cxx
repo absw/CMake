@@ -3,6 +3,7 @@
 #include "cmIncludeExternalMSProjectCommand.h"
 
 #ifdef _WIN32
+#include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
 #include "cmStateTypes.h"
 #include "cmSystemTools.h"
@@ -22,7 +23,9 @@ bool cmIncludeExternalMSProjectCommand::InitialPass(
   }
 // only compile this for win32 to avoid coverage errors
 #ifdef _WIN32
-  if (this->Makefile->GetDefinition("WIN32")) {
+  if (this->Makefile->GetDefinition("WIN32") ||
+      this->Makefile->GetGlobalGenerator()
+        ->IsIncludeExternalMSProjectSupported()) {
     enum Doing
     {
       DoingNone,
@@ -91,9 +94,8 @@ bool cmIncludeExternalMSProjectCommand::InitialPass(
     if (!platformMapping.empty())
       target->SetProperty("VS_PLATFORM_MAPPING", platformMapping.c_str());
 
-    for (std::vector<std::string>::const_iterator it = depends.begin();
-         it != depends.end(); ++it) {
-      target->AddUtility(it->c_str());
+    for (std::string const& d : depends) {
+      target->AddUtility(d.c_str());
     }
   }
 #endif

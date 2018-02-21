@@ -13,7 +13,6 @@
 #include "cmSourceFile.h"
 #include "cmSystemTools.h"
 #include "cmTarget.h"
-#include "cm_unordered_map.hxx"
 
 class cmExecutionStatus;
 
@@ -31,7 +30,7 @@ public:
    */
   cmDependInformation()
     : DependDone(false)
-    , SourceFile(CM_NULLPTR)
+    , SourceFile(nullptr)
   {
   }
 
@@ -114,8 +113,9 @@ public:
     std::set<std::string> uniqueIncludes;
     std::vector<std::string> orderedAndUniqueIncludes;
     cmTargets& targets = this->Makefile->GetTargets();
-    for (cmTargets::iterator l = targets.begin(); l != targets.end(); ++l) {
-      const char* incDirProp = l->second.GetProperty("INCLUDE_DIRECTORIES");
+    for (auto const& target : targets) {
+      const char* incDirProp =
+        target.second.GetProperty("INCLUDE_DIRECTORIES");
       if (!incDirProp) {
         continue;
       }
@@ -126,9 +126,7 @@ public:
       std::vector<std::string> includes;
       cmSystemTools::ExpandListArgument(incDirs, includes);
 
-      for (std::vector<std::string>::const_iterator j = includes.begin();
-           j != includes.end(); ++j) {
-        std::string path = *j;
+      for (std::string& path : includes) {
         this->Makefile->ExpandVariablesInString(path);
         if (uniqueIncludes.insert(path).second) {
           orderedAndUniqueIncludes.push_back(path);
@@ -136,10 +134,8 @@ public:
       }
     }
 
-    for (std::vector<std::string>::const_iterator it =
-           orderedAndUniqueIncludes.begin();
-         it != orderedAndUniqueIncludes.end(); ++it) {
-      this->AddSearchPath(*it);
+    for (std::string const& inc : orderedAndUniqueIncludes) {
+      this->AddSearchPath(inc);
     }
   }
 
@@ -157,7 +153,7 @@ public:
    */
   const cmDependInformation* FindDependencies(const char* file)
   {
-    cmDependInformation* info = this->GetDependInformation(file, CM_NULLPTR);
+    cmDependInformation* info = this->GetDependInformation(file, nullptr);
     this->GenerateDependInformation(info);
     return info;
   }
@@ -177,7 +173,7 @@ protected:
 
     std::string line;
     while (cmSystemTools::GetLineFromStream(fin, line)) {
-      if (cmHasLiteralPrefix(line.c_str(), "#include")) {
+      if (cmHasLiteralPrefix(line, "#include")) {
         // if it is an include line then create a string class
         size_t qstart = line.find('\"', 8);
         size_t qend;
@@ -202,7 +198,7 @@ protected:
             message += includeFile;
             message += " for file ";
             message += info->FullPath;
-            cmSystemTools::Error(message.c_str(), CM_NULLPTR);
+            cmSystemTools::Error(message.c_str(), nullptr);
           }
           continue;
         }
@@ -217,63 +213,51 @@ protected:
           cxxFile = root + ".cxx";
           bool found = false;
           // try jumping to .cxx .cpp and .c in order
-          if (cmSystemTools::FileExists(cxxFile.c_str())) {
+          if (cmSystemTools::FileExists(cxxFile)) {
             found = true;
           }
-          for (std::vector<std::string>::iterator i =
-                 this->IncludeDirectories.begin();
-               i != this->IncludeDirectories.end(); ++i) {
-            std::string path = *i;
+          for (std::string path : this->IncludeDirectories) {
             path = path + "/";
             path = path + cxxFile;
-            if (cmSystemTools::FileExists(path.c_str())) {
+            if (cmSystemTools::FileExists(path)) {
               found = true;
             }
           }
           if (!found) {
             cxxFile = root + ".cpp";
-            if (cmSystemTools::FileExists(cxxFile.c_str())) {
+            if (cmSystemTools::FileExists(cxxFile)) {
               found = true;
             }
-            for (std::vector<std::string>::iterator i =
-                   this->IncludeDirectories.begin();
-                 i != this->IncludeDirectories.end(); ++i) {
-              std::string path = *i;
+            for (std::string path : this->IncludeDirectories) {
               path = path + "/";
               path = path + cxxFile;
-              if (cmSystemTools::FileExists(path.c_str())) {
+              if (cmSystemTools::FileExists(path)) {
                 found = true;
               }
             }
           }
           if (!found) {
             cxxFile = root + ".c";
-            if (cmSystemTools::FileExists(cxxFile.c_str())) {
+            if (cmSystemTools::FileExists(cxxFile)) {
               found = true;
             }
-            for (std::vector<std::string>::iterator i =
-                   this->IncludeDirectories.begin();
-                 i != this->IncludeDirectories.end(); ++i) {
-              std::string path = *i;
+            for (std::string path : this->IncludeDirectories) {
               path = path + "/";
               path = path + cxxFile;
-              if (cmSystemTools::FileExists(path.c_str())) {
+              if (cmSystemTools::FileExists(path)) {
                 found = true;
               }
             }
           }
           if (!found) {
             cxxFile = root + ".txx";
-            if (cmSystemTools::FileExists(cxxFile.c_str())) {
+            if (cmSystemTools::FileExists(cxxFile)) {
               found = true;
             }
-            for (std::vector<std::string>::iterator i =
-                   this->IncludeDirectories.begin();
-                 i != this->IncludeDirectories.end(); ++i) {
-              std::string path = *i;
+            for (std::string path : this->IncludeDirectories) {
               path = path + "/";
               path = path + cxxFile;
-              if (cmSystemTools::FileExists(path.c_str())) {
+              if (cmSystemTools::FileExists(path)) {
                 found = true;
               }
             }
@@ -328,7 +312,7 @@ protected:
 
     // See if the cmSourceFile for it has any files specified as
     // dependency hints.
-    if (info->SourceFile != CM_NULLPTR) {
+    if (info->SourceFile != nullptr) {
 
       // Get the cmSourceFile corresponding to this.
       const cmSourceFile& cFile = *(info->SourceFile);
@@ -337,10 +321,8 @@ protected:
       if (!cFile.GetDepends().empty()) {
         // Dependency hints have been given.  Use them to begin the
         // recursion.
-        for (std::vector<std::string>::const_iterator file =
-               cFile.GetDepends().begin();
-             file != cFile.GetDepends().end(); ++file) {
-          this->AddDependency(info, file->c_str());
+        for (std::string const& file : cFile.GetDepends()) {
+          this->AddDependency(info, file.c_str());
         }
 
         // Found dependency information.  We are done.
@@ -357,10 +339,7 @@ protected:
           found = true;
         } else {
           // try to guess which include path to use
-          for (std::vector<std::string>::iterator t =
-                 this->IncludeDirectories.begin();
-               t != this->IncludeDirectories.end(); ++t) {
-            std::string incpath = *t;
+          for (std::string incpath : this->IncludeDirectories) {
             if (!incpath.empty() && incpath[incpath.size() - 1] != '/') {
               incpath = incpath + "/";
             }
@@ -383,7 +362,7 @@ protected:
       } else {
         // Destroy the name of the file so that it won't be output as a
         // dependency.
-        info->FullPath = "";
+        info->FullPath.clear();
       }
     }
   }
@@ -442,15 +421,12 @@ protected:
       return fp;
     }
 
-    for (std::vector<std::string>::iterator i =
-           this->IncludeDirectories.begin();
-         i != this->IncludeDirectories.end(); ++i) {
-      std::string path = *i;
+    for (std::string path : this->IncludeDirectories) {
       if (!path.empty() && path[path.size() - 1] != '/') {
         path = path + "/";
       }
       path = path + fname;
-      if (cmSystemTools::FileExists(path.c_str(), true) &&
+      if (cmSystemTools::FileExists(path, true) &&
           !cmSystemTools::FileIsDirectory(path)) {
         std::string fp = cmSystemTools::CollapseFullPath(path);
         this->DirectoryToFileToPathMap[extraPath ? extraPath : ""][fname] = fp;
@@ -464,7 +440,7 @@ protected:
         path = path + "/";
       }
       path = path + fname;
-      if (cmSystemTools::FileExists(path.c_str(), true) &&
+      if (cmSystemTools::FileExists(path, true) &&
           !cmSystemTools::FileIsDirectory(path)) {
         std::string fp = cmSystemTools::CollapseFullPath(path);
         this->DirectoryToFileToPathMap[extraPath][fname] = fp;
@@ -532,19 +508,17 @@ void cmOutputRequiredFilesCommand::ListDependencies(
   // add info to the visited set
   visited->insert(info);
   // now recurse with info's dependencies
-  for (cmDependInformation::DependencySetType::const_iterator d =
-         info->DependencySet.begin();
-       d != info->DependencySet.end(); ++d) {
-    if (visited->find(*d) == visited->end()) {
-      if (info->FullPath != "") {
-        std::string tmp = (*d)->FullPath;
+  for (cmDependInformation* d : info->DependencySet) {
+    if (visited->find(d) == visited->end()) {
+      if (!info->FullPath.empty()) {
+        std::string tmp = d->FullPath;
         std::string::size_type pos = tmp.rfind('.');
         if (pos != std::string::npos && (tmp.substr(pos) != ".h")) {
           tmp = tmp.substr(0, pos);
-          fprintf(fout, "%s\n", (*d)->FullPath.c_str());
+          fprintf(fout, "%s\n", d->FullPath.c_str());
         }
       }
-      this->ListDependencies(*d, fout, visited);
+      this->ListDependencies(d, fout, visited);
     }
   }
 }
