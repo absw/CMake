@@ -12,6 +12,12 @@
   See the License for more information.
 ============================================================================*/
 
+#include <future>
+#include <iostream>
+#include <objbase.h>
+#include <shellapi.h>
+#include <windows.h>
+
 #include "cmMakefile.h"
 #include "cmGeneratedFileStream.h"
 #include "cmTarget.h"
@@ -26,7 +32,6 @@
 #include "cmLocalGenerator.h"
 #include "cmLocalIarGenerator.h"
 
-#include <sstream>
 #include <cmsys/Glob.hxx>
 
 #include <algorithm>
@@ -720,7 +725,7 @@ void cmGlobalIarGenerator::Generate()
 
     // create a project file
     if (strcmp(makeFile->GetCurrentBinaryDirectory(),
-        makeFile->GetHomeOutputDirectory()) == 0)
+        makeFile->GetHomeOutputDirectory().c_str()) == 0)
       {
       this->workspace.workspaceDir = makeFile->GetCurrentBinaryDirectory();
       this->workspace.name = lgs0->GetProjectName();
@@ -2178,6 +2183,7 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
 void cmGlobalIarGenerator::Workspace::CreateWorkspaceFile()
 {
   std::string wsFileName = this->workspaceDir + "/" + this->name + ".eww";
+  this->workspacePath = wsFileName;
   std::string batFileName = this->workspaceDir + "/BUILD_" + this->name + ".bat";
 
   std::string iarBuildCmd = cmGlobalIarGenerator::GLOBALCFG.iarArmPath;
@@ -2300,4 +2306,32 @@ void cmGlobalIarGenerator::Workspace::RegisterProject(std::string wsName,
     Project* project)
 {
   this->projects.insert(std::make_pair(wsName, project));
+}
+
+static bool OpenWorkspace(std::string workspace)
+{
+    HRESULT comInitialized =
+        CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (FAILED(comInitialized)) {
+        return false;
+    }
+
+    HINSTANCE hi =
+        ShellExecuteA(NULL, "open", workspace.c_str(), NULL, NULL, SW_SHOWNORMAL);
+
+    CoUninitialize();
+
+    return reinterpret_cast<intptr_t>(hi) > 32;
+}
+
+
+bool cmGlobalIarGenerator::Open(const std::string& bindir,
+    const std::string& projectName,
+    bool dryRun)
+{
+    if (dryRun) {
+        return cmSystemTools::FileExists(this->workspace.workspacePath, true);
+    }
+
+    return std::async(std::launch::async, OpenWorkspace, this->workspace.workspacePath).get();
 }
