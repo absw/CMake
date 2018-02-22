@@ -8,6 +8,7 @@
 
 #include "cmCPackComponentGroup.h"
 #include "cmCPackLog.h"
+#include "cmDuration.h"
 #include "cmGeneratedFileStream.h"
 #include "cmSystemTools.h"
 
@@ -54,7 +55,7 @@ int cmCPackProductBuildGenerator::PackageFiles()
   } else {
     if (!this->GenerateComponentPackage(basePackageDir,
                                         this->GetOption("CPACK_PACKAGE_NAME"),
-                                        toplevel, NULL)) {
+                                        toplevel, nullptr)) {
       return 0;
     }
   }
@@ -145,9 +146,9 @@ bool cmCPackProductBuildGenerator::RunProductBuild(const std::string& command)
   cmCPackLogger(cmCPackLog::LOG_VERBOSE, "Execute: " << command << std::endl);
   std::string output, error_output;
   int retVal = 1;
-  bool res =
-    cmSystemTools::RunSingleCommand(command.c_str(), &output, &error_output,
-                                    &retVal, 0, this->GeneratorVerbose, 0);
+  bool res = cmSystemTools::RunSingleCommand(
+    command.c_str(), &output, &error_output, &retVal, nullptr,
+    this->GeneratorVerbose, cmDuration::zero());
   cmCPackLogger(cmCPackLog::LOG_VERBOSE, "Done running command" << std::endl);
   if (!res || retVal) {
     cmGeneratedFileStream ofs(tmpFile.c_str());
@@ -174,7 +175,7 @@ bool cmCPackProductBuildGenerator::GenerateComponentPackage(
   cmCPackLogger(cmCPackLog::LOG_OUTPUT, "-   Building component package: "
                   << packageFile << std::endl);
 
-  const char* comp_name = component ? component->Name.c_str() : NULL;
+  const char* comp_name = component ? component->Name.c_str() : nullptr;
 
   const char* preflight = this->GetComponentScript("PREFLIGHT", comp_name);
   const char* postflight = this->GetComponentScript("POSTFLIGHT", comp_name);
@@ -190,7 +191,7 @@ bool cmCPackProductBuildGenerator::GenerateComponentPackage(
     cmCPackLogger(cmCPackLog::LOG_ERROR,
                   "Problem creating installer directory: " << scriptDir
                                                            << std::endl);
-    return 0;
+    return false;
   }
 
   // if preflight, postflight, or postupgrade are set

@@ -3,8 +3,9 @@
 #ifndef cmSourceGroupCommand_h
 #define cmSourceGroupCommand_h
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -24,20 +25,34 @@ public:
   /**
    * This is a virtual constructor for the command.
    */
-  cmCommand* Clone() CM_OVERRIDE { return new cmSourceGroupCommand; }
+  cmCommand* Clone() override { return new cmSourceGroupCommand; }
 
   /**
    * This is called when the command is first encountered in
    * the CMakeLists.txt file.
    */
   bool InitialPass(std::vector<std::string> const& args,
-                   cmExecutionStatus& status) CM_OVERRIDE;
+                   cmExecutionStatus& status) override;
 
 private:
-  bool processTree(const std::vector<std::string>& args,
-                   std::string& errorMsg);
-  bool checkTreeArgumentsPreconditions(const std::vector<std::string>& args,
-                                       std::string& errorMsg) const;
+  typedef std::map<std::string, std::vector<std::string>> ParsedArguments;
+  typedef std::vector<std::string> ExpectedOptions;
+
+  ExpectedOptions getExpectedOptions() const;
+
+  bool isExpectedOption(const std::string& argument,
+                        const ExpectedOptions& expectedOptions);
+
+  void parseArguments(const std::vector<std::string>& args,
+                      cmSourceGroupCommand::ParsedArguments& parsedArguments);
+
+  bool processTree(ParsedArguments& parsedArguments, std::string& errorMsg);
+
+  bool checkArgumentsPreconditions(const ParsedArguments& parsedArguments,
+                                   std::string& errorMsg) const;
+  bool checkSingleParameterArgumentPreconditions(
+    const std::string& argument, const ParsedArguments& parsedArguments,
+    std::string& errorMsg) const;
 };
 
 #endif

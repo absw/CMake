@@ -47,7 +47,7 @@ bool cmCTestVC::InitialCheckout(const char* command)
   std::string parent = cmSystemTools::GetFilenamePath(this->SourceDirectory);
   cmCTestLog(this->CTest, HANDLER_OUTPUT,
              "   Perform checkout in directory: " << parent << "\n");
-  if (!cmSystemTools::MakeDirectory(parent.c_str())) {
+  if (!cmSystemTools::MakeDirectory(parent)) {
     cmCTestLog(this->CTest, ERROR_MESSAGE,
                "Cannot create directory: " << parent << std::endl);
     return false;
@@ -56,11 +56,11 @@ bool cmCTestVC::InitialCheckout(const char* command)
   // Construct the initial checkout command line.
   std::vector<std::string> args = cmSystemTools::ParseArguments(command);
   std::vector<char const*> vc_co;
-  for (std::vector<std::string>::const_iterator ai = args.begin();
-       ai != args.end(); ++ai) {
-    vc_co.push_back(ai->c_str());
+  vc_co.reserve(args.size() + 1);
+  for (std::string const& arg : args) {
+    vc_co.push_back(arg.c_str());
   }
-  vc_co.push_back(CM_NULLPTR);
+  vc_co.push_back(nullptr);
 
   // Run the initial checkout command and log its output.
   this->Log << "--- Begin Initial Checkout ---\n";
@@ -113,7 +113,7 @@ bool cmCTestVC::RunUpdateCommand(char const* const* cmd, OutputParser* out,
   }
 
   // Run the command.
-  return this->RunChild(cmd, out, err, CM_NULLPTR, encoding);
+  return this->RunChild(cmd, out, err, nullptr, encoding);
 }
 
 std::string cmCTestVC::GetNightlyTime()

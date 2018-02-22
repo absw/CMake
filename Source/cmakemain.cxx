@@ -1,7 +1,7 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
    file Copyright.txt or https://cmake.org/licensing for details.  */
-#include "cmConfigure.h"
 
+#include "cmake.h"
 #include "cmAlgorithms.h"
 #include "cmDocumentationEntry.h"
 #include "cmGlobalGenerator.h"
@@ -9,13 +9,14 @@
 #include "cmState.h"
 #include "cmStateTypes.h"
 #include "cmSystemTools.h"
-#include "cmake.h"
 #include "cmcmd.h"
 
 #ifdef CMAKE_BUILD_WITH_CMAKE
 #include "cmDocumentation.h"
 #include "cmDynamicLoader.h"
 #endif
+
+#include "cm_uv.h"
 
 #include "cmsys/Encoding.hxx"
 #if defined(_WIN32) && defined(CMAKE_BUILD_WITH_CMAKE)
@@ -26,33 +27,24 @@
 #include <string>
 #include <vector>
 
-#ifdef CMAKE_USE_LIBUV
-#ifdef _WIN32
-#include <fcntl.h>  /* _O_TEXT */
-#include <stdlib.h> /* _set_fmode, _fmode */
-#endif
-#include "cm_uv.h"
-#endif
-
 #ifdef CMAKE_BUILD_WITH_CMAKE
 static const char* cmDocumentationName[][2] = {
-  { CM_NULLPTR, "  cmake - Cross-Platform Makefile Generator." },
-  { CM_NULLPTR, CM_NULLPTR }
+  { nullptr, "  cmake - Cross-Platform Makefile Generator." },
+  { nullptr, nullptr }
 };
 
 static const char* cmDocumentationUsage[][2] = {
-  { CM_NULLPTR, "  cmake [options] <path-to-source>\n"
-                "  cmake [options] <path-to-existing-build>" },
-  { CM_NULLPTR,
-    "Specify a source directory to (re-)generate a build system for "
-    "it in the current working directory.  Specify an existing build "
-    "directory to re-generate its build system." },
-  { CM_NULLPTR, CM_NULLPTR }
+  { nullptr, "  cmake [options] <path-to-source>\n"
+             "  cmake [options] <path-to-existing-build>" },
+  { nullptr, "Specify a source directory to (re-)generate a build system for "
+             "it in the current working directory.  Specify an existing build "
+             "directory to re-generate its build system." },
+  { nullptr, nullptr }
 };
 
 static const char* cmDocumentationUsageNote[][2] = {
-  { CM_NULLPTR, "Run 'cmake --help' for more information." },
-  { CM_NULLPTR, CM_NULLPTR }
+  { nullptr, "Run 'cmake --help' for more information." },
+  { nullptr, nullptr }
 };
 
 #define CMAKE_BUILD_OPTIONS                                                   \
@@ -70,6 +62,7 @@ static const char* cmDocumentationOptions[][2] = {
   { "-E", "CMake command mode." },
   { "-L[A][H]", "List non-advanced cached variables." },
   { "--build <dir>", "Build a CMake-generated project binary tree." },
+  { "--open <dir>", "Open generated project in the associated application." },
   { "-N", "View mode only." },
   { "-P <file>", "Process script mode." },
   { "--find-package", "Run in pkg-config like mode." },
@@ -88,7 +81,7 @@ static const char* cmDocumentationOptions[][2] = {
   { "--no-warn-unused-cli", "Don't warn about command line options." },
   { "--check-system-vars", "Find problems with variable usage in system "
                            "files." },
-  { CM_NULLPTR, CM_NULLPTR }
+  { nullptr, nullptr }
 };
 
 #endif
@@ -104,17 +97,18 @@ static int do_command(int ac, char const* const* av)
 
 int do_cmake(int ac, char const* const* av);
 static int do_build(int ac, char const* const* av);
+static int do_open(int ac, char const* const* av);
 
 static cmMakefile* cmakemainGetMakefile(void* clientdata)
 {
-  cmake* cm = (cmake*)clientdata;
+  cmake* cm = static_cast<cmake*>(clientdata);
   if (cm && cm->GetDebugOutput()) {
     cmGlobalGenerator* gg = cm->GetGlobalGenerator();
     if (gg) {
       return gg->GetCurrentMakefile();
     }
   }
-  return CM_NULLPTR;
+  return nullptr;
 }
 
 static std::string cmakemainGetStack(void* clientdata)
@@ -172,23 +166,15 @@ int main(int ac, char const* const* av)
   ac = args.argc();
   av = args.argv();
 
-#if defined(CMAKE_USE_LIBUV) && defined(_WIN32)
-  // Perform libuv one-time initialization now, and then un-do its
-  // global _fmode setting so that using libuv does not change the
-  // default file text/binary mode.  See libuv issue 840.
-  uv_loop_close(uv_default_loop());
-#ifdef _MSC_VER
-  _set_fmode(_O_TEXT);
-#else
-  _fmode = _O_TEXT;
-#endif
-#endif
-
   cmSystemTools::EnableMSVCDebugHook();
+  cmSystemTools::InitializeLibUV();
   cmSystemTools::FindCMakeResources(av[0]);
   if (ac > 1) {
     if (strcmp(av[1], "--build") == 0) {
       return do_build(ac, av);
+    }
+    if (strcmp(av[1], "--open") == 0) {
+      return do_open(ac, av);
     }
     if (strcmp(av[1], "-E") == 0) {
       return do_command(ac, av);
@@ -198,9 +184,7 @@ int main(int ac, char const* const* av)
 #ifdef CMAKE_BUILD_WITH_CMAKE
   cmDynamicLoader::FlushCache();
 #endif
-#ifdef CMAKE_USE_LIBUV
   uv_loop_close(uv_default_loop());
-#endif
   return ret;
 }
 
@@ -306,34 +290,32 @@ int do_cmake(int ac, char const* const* av)
     return ret;
   }
   cmake::Role const role =
-    workingMode == cmake::NORMAL_MODE ? cmake::RoleProject : cmake::RoleScript;
+    workingMode == cmake::SCRIPT_MODE ? cmake::RoleScript : cmake::RoleProject;
   cmake cm(role);
   cm.SetHomeDirectory("");
   cm.SetHomeOutputDirectory("");
-  cmSystemTools::SetMessageCallback(cmakemainMessageCallback, (void*)&cm);
-  cm.SetProgressCallback(cmakemainProgressCallback, (void*)&cm);
+  cmSystemTools::SetMessageCallback(cmakemainMessageCallback, &cm);
+  cm.SetProgressCallback(cmakemainProgressCallback, &cm);
   cm.SetWorkingMode(workingMode);
 
   int res = cm.Run(args, view_only);
   if (list_cached || list_all_cached) {
     std::cout << "-- Cache values" << std::endl;
     std::vector<std::string> keys = cm.GetState()->GetCacheEntryKeys();
-    for (std::vector<std::string>::const_iterator it = keys.begin();
-         it != keys.end(); ++it) {
-      cmStateEnums::CacheEntryType t = cm.GetState()->GetCacheEntryType(*it);
+    for (std::string const& k : keys) {
+      cmStateEnums::CacheEntryType t = cm.GetState()->GetCacheEntryType(k);
       if (t != cmStateEnums::INTERNAL && t != cmStateEnums::STATIC &&
           t != cmStateEnums::UNINITIALIZED) {
         const char* advancedProp =
-          cm.GetState()->GetCacheEntryProperty(*it, "ADVANCED");
+          cm.GetState()->GetCacheEntryProperty(k, "ADVANCED");
         if (list_all_cached || !advancedProp) {
           if (list_help) {
             std::cout << "// "
-                      << cm.GetState()->GetCacheEntryProperty(*it,
-                                                              "HELPSTRING")
+                      << cm.GetState()->GetCacheEntryProperty(k, "HELPSTRING")
                       << std::endl;
           }
-          std::cout << *it << ":" << cmState::CacheEntryTypeToString(t) << "="
-                    << cm.GetState()->GetCacheEntryValue(*it) << std::endl;
+          std::cout << k << ":" << cmState::CacheEntryTypeToString(t) << "="
+                    << cm.GetState()->GetCacheEntryValue(k) << std::endl;
           if (list_help) {
             std::cout << std::endl;
           }
@@ -381,7 +363,7 @@ static int do_build(int ac, char const* const* av)
         hasTarget = true;
       } else {
         std::cerr << "'--target' may not be specified more than once.\n\n";
-        dir = "";
+        dir.clear();
         break;
       }
     } else if (strcmp(av[i], "--config") == 0) {
@@ -409,7 +391,7 @@ static int do_build(int ac, char const* const* av)
           break;
         default:
           std::cerr << "Unknown argument " << av[i] << std::endl;
-          dir = "";
+          dir.clear();
           break;
       }
     }
@@ -426,8 +408,46 @@ static int do_build(int ac, char const* const* av)
   }
 
   cmake cm(cmake::RoleInternal);
-  cmSystemTools::SetMessageCallback(cmakemainMessageCallback, (void*)&cm);
-  cm.SetProgressCallback(cmakemainProgressCallback, (void*)&cm);
+  cmSystemTools::SetMessageCallback(cmakemainMessageCallback, &cm);
+  cm.SetProgressCallback(cmakemainProgressCallback, &cm);
   return cm.Build(dir, target, config, nativeOptions, clean);
+#endif
+}
+
+static int do_open(int ac, char const* const* av)
+{
+#ifndef CMAKE_BUILD_WITH_CMAKE
+  std::cerr << "This cmake does not support --open\n";
+  return -1;
+#else
+  std::string dir;
+
+  enum Doing
+  {
+    DoingNone,
+    DoingDir,
+  };
+  Doing doing = DoingDir;
+  for (int i = 2; i < ac; ++i) {
+    switch (doing) {
+      case DoingDir:
+        dir = cmSystemTools::CollapseFullPath(av[i]);
+        doing = DoingNone;
+        break;
+      default:
+        std::cerr << "Unknown argument " << av[i] << std::endl;
+        dir.clear();
+        break;
+    }
+  }
+  if (dir.empty()) {
+    std::cerr << "Usage: cmake --open <dir>\n";
+    return 1;
+  }
+
+  cmake cm(cmake::RoleInternal);
+  cmSystemTools::SetMessageCallback(cmakemainMessageCallback, &cm);
+  cm.SetProgressCallback(cmakemainProgressCallback, &cm);
+  return cm.Open(dir, false) ? 0 : 1;
 #endif
 }

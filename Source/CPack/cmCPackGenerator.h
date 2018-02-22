@@ -3,7 +3,7 @@
 #ifndef cmCPackGenerator_h
 #define cmCPackGenerator_h
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include <map>
 #include <sstream>
@@ -12,6 +12,7 @@
 
 #include "cmCPackComponentGroup.h"
 #include "cmSystemTools.h"
+#include "cm_sys_stat.h"
 
 class cmCPackLog;
 class cmInstalledFile;
@@ -33,6 +34,16 @@ public:
     this->GeneratorVerbose =
       val ? cmSystemTools::OUTPUT_MERGE : cmSystemTools::OUTPUT_NONE;
   }
+
+  /**
+   * Put underlying cmake scripts in trace mode.
+   */
+  void SetTrace(bool val) { this->Trace = val; }
+
+  /**
+   * Put underlying cmake scripts in expanded trace mode.
+   */
+  void SetTraceExpand(bool val) { this->TraceExpand = val; }
 
   /**
    * Returns true if the generator may work on this system.
@@ -105,7 +116,7 @@ protected:
   cmInstalledFile const* GetInstalledFile(std::string const& name) const;
 
   virtual const char* GetOutputExtension() { return ".cpack"; }
-  virtual const char* GetOutputPostfix() { return CM_NULLPTR; }
+  virtual const char* GetOutputPostfix() { return nullptr; }
 
   /**
    * Prepare requested grouping kind from CPACK_xxx vars
@@ -168,9 +179,11 @@ protected:
   virtual int InstallProjectViaInstallScript(
     bool setDestDir, const std::string& tempInstallDirectory);
   virtual int InstallProjectViaInstalledDirectories(
-    bool setDestDir, const std::string& tempInstallDirectory);
+    bool setDestDir, const std::string& tempInstallDirectory,
+    const mode_t* default_dir_mode);
   virtual int InstallProjectViaInstallCMakeProjects(
-    bool setDestDir, const std::string& tempInstallDirectory);
+    bool setDestDir, const std::string& tempInstallDirectory,
+    const mode_t* default_dir_mode);
 
   /**
    * The various level of support of
@@ -292,6 +305,8 @@ protected:
   ComponentPackageMethod componentPackageMethod;
 
   cmCPackLog* Logger;
+  bool Trace;
+  bool TraceExpand;
 
 private:
   cmMakefile* MakefileMap;
@@ -299,7 +314,7 @@ private:
 
 #define cmCPackTypeMacro(klass, superclass)                                   \
   typedef superclass Superclass;                                              \
-  const char* GetNameOfClass() CM_OVERRIDE { return #klass; }                 \
+  const char* GetNameOfClass() override { return #klass; }                    \
   static cmCPackGenerator* CreateGenerator() { return new klass; }            \
   class cmCPackTypeMacro_UseTrailingSemicolon
 

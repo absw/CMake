@@ -363,7 +363,7 @@ void cmGhsMultiTargetGenerator::WriteTargetLinkLibraries(
       this->GeneratorTarget->GetCreateRuleVariable(language, config);
     bool useWatcomQuote =
       this->Makefile->IsOn(createRule + "_USE_WATCOM_QUOTE");
-    CM_AUTO_PTR<cmLinkLineComputer> linkLineComputer(
+    std::unique_ptr<cmLinkLineComputer> linkLineComputer(
       this->GetGlobalGenerator()->CreateLinkLineComputer(
         this->LocalGenerator,
         this->LocalGenerator->GetStateSnapshot().GetDirectory()));
@@ -439,7 +439,7 @@ cmGhsMultiTargetGenerator::GetObjectNames(
   cmLocalGhsMultiGenerator* const localGhsMultiGenerator,
   cmGeneratorTarget* const generatorTarget)
 {
-  std::map<std::string, std::vector<cmSourceFile*> > filenameToSource;
+  std::map<std::string, std::vector<cmSourceFile*>> filenameToSource;
   std::map<cmSourceFile*, std::string> sourceToFilename;
   for (std::vector<cmSourceFile*>::const_iterator sf = objectSources->begin();
        sf != objectSources->end(); ++sf) {
@@ -451,7 +451,7 @@ cmGhsMultiTargetGenerator::GetObjectNames(
   }
 
   std::vector<cmSourceFile*> duplicateSources;
-  for (std::map<std::string, std::vector<cmSourceFile*> >::const_iterator
+  for (std::map<std::string, std::vector<cmSourceFile*>>::const_iterator
          msvSourceI = filenameToSource.begin();
        msvSourceI != filenameToSource.end(); ++msvSourceI) {
     if (msvSourceI->second.size() > 1) {
@@ -486,14 +486,14 @@ void cmGhsMultiTargetGenerator::WriteSources(
   for (std::vector<cmSourceFile*>::const_iterator si = objectSources.begin();
        si != objectSources.end(); ++si) {
     std::vector<cmSourceGroup> sourceGroups(this->Makefile->GetSourceGroups());
-    char const* sourceFullPath = (*si)->GetFullPath().c_str();
+    std::string const& sourceFullPath = (*si)->GetFullPath();
     cmSourceGroup* sourceGroup =
       this->Makefile->FindSourceGroup(sourceFullPath, sourceGroups);
-    std::string sgPath(sourceGroup->GetFullName());
+    std::string sgPath = sourceGroup->GetFullName();
     cmSystemTools::ConvertToUnixSlashes(sgPath);
     cmGlobalGhsMultiGenerator::AddFilesUpToPath(
       this->GetFolderBuildStreams(), &this->FolderBuildStreams,
-      this->LocalGenerator->GetBinaryDirectory(), sgPath,
+      this->LocalGenerator->GetBinaryDirectory().c_str(), sgPath,
       GhsMultiGpj::SUBPROJECT, this->RelBuildFilePath);
 
     std::string fullSourcePath((*si)->GetFullPath());
@@ -604,11 +604,11 @@ std::string cmGhsMultiTargetGenerator::ComputeLongestObjectDirectory(
   dir_max += "/";
   std::vector<cmSourceGroup> sourceGroups(
     localGhsMultiGenerator->GetMakefile()->GetSourceGroups());
-  char const* const sourceFullPath = sourceFile->GetFullPath().c_str();
+  std::string const& sourceFullPath = sourceFile->GetFullPath();
   cmSourceGroup* sourceGroup =
     localGhsMultiGenerator->GetMakefile()->FindSourceGroup(sourceFullPath,
                                                            sourceGroups);
-  std::string const sgPath(sourceGroup->GetFullName());
+  std::string const& sgPath = sourceGroup->GetFullName();
   dir_max += sgPath;
   dir_max += "/Objs/libs/";
   dir_max += generatorTarget->Target->GetName();

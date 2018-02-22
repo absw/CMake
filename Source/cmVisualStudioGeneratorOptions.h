@@ -3,7 +3,7 @@
 #ifndef cmVisualStudioGeneratorOptions_h
 #define cmVisualStudioGeneratorOptions_h
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include <iosfwd>
 #include <string>
@@ -77,6 +77,8 @@ public:
 
   void FixCudaCodeGeneration();
 
+  void FixManifestUACFlags();
+
   bool IsDebug() const;
   bool IsWinRt() const;
   bool IsManaged() const;
@@ -84,6 +86,10 @@ public:
   void OutputPreprocessorDefinitions(std::ostream& fout, const char* prefix,
                                      const char* suffix,
                                      const std::string& lang);
+  void OutputAdditionalIncludeDirectories(std::ostream& fout,
+                                          const char* prefix,
+                                          const char* suffix,
+                                          const std::string& lang);
   void OutputFlagMap(std::ostream& fout, const char* indent);
   void SetConfiguration(const char* config);
 

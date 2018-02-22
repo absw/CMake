@@ -22,7 +22,13 @@
 #include "cmsys/FStream.hxx"
 #include "cmsys/SystemTools.hxx"
 
-#include <rpc.h> // for GUID generation
+#ifdef _WIN32
+#include <rpc.h> // for GUID generation (windows only)
+#else
+#include <uuid/uuid.h> // for GUID generation (libuuid)
+#endif
+
+#include "cmCMakeToWixPath.h"
 
 cmCPackWIXGenerator::cmCPackWIXGenerator()
   : Patch(0)
@@ -89,9 +95,8 @@ bool cmCPackWIXGenerator::RunCandleCommand(std::string const& sourceFile,
   command << " -arch " << GetArchitecture();
   command << " -out " << QuotePath(objectFile);
 
-  for (extension_set_t::const_iterator i = CandleExtensions.begin();
-       i != CandleExtensions.end(); ++i) {
-    command << " -ext " << QuotePath(*i);
+  for (std::string const& ext : CandleExtensions) {
+    command << " -ext " << QuotePath(ext);
   }
 
   AddCustomFlags("CPACK_WIX_CANDLE_EXTRA_FLAGS", command);
@@ -111,11 +116,10 @@ bool cmCPackWIXGenerator::RunLightCommand(std::string const& objectFiles)
   std::ostringstream command;
   command << QuotePath(executable);
   command << " -nologo";
-  command << " -out " << QuotePath(packageFileNames.at(0));
+  command << " -out " << QuotePath(CMakeToWixPath(packageFileNames.at(0)));
 
-  for (extension_set_t::const_iterator i = this->LightExtensions.begin();
-       i != this->LightExtensions.end(); ++i) {
-    command << " -ext " << QuotePath(*i);
+  for (std::string const& ext : this->LightExtensions) {
+    command << " -ext " << QuotePath(ext);
   }
 
   const char* const cultures = GetOption("CPACK_WIX_CULTURES");
@@ -219,8 +223,8 @@ bool cmCPackWIXGenerator::InitializeWiXConfiguration()
     std::vector<std::string> patchFilePaths;
     cmSystemTools::ExpandListArgument(patchFilePath, patchFilePaths);
 
-    for (size_t i = 0; i < patchFilePaths.size(); ++i) {
-      if (!this->Patch->LoadFragments(patchFilePaths[i])) {
+    for (std::string const& p : patchFilePaths) {
+      if (!this->Patch->LoadFragments(p)) {
         return false;
       }
     }
@@ -254,9 +258,7 @@ bool cmCPackWIXGenerator::PackageFilesImpl()
   std::set<std::string> usedBaseNames;
 
   std::ostringstream objectFiles;
-  for (size_t i = 0; i < this->WixSources.size(); ++i) {
-    std::string const& sourceFilename = this->WixSources[i];
-
+  for (std::string const& sourceFilename : this->WixSources) {
     std::string baseName =
       cmSystemTools::GetFilenameWithoutLastExtension(sourceFilename);
 
@@ -274,11 +276,12 @@ bool cmCPackWIXGenerator::PackageFilesImpl()
     std::string objectFilename =
       this->CPackTopLevel + "/" + uniqueBaseName + ".wixobj";
 
-    if (!RunCandleCommand(sourceFilename, objectFilename)) {
+    if (!RunCandleCommand(CMakeToWixPath(sourceFilename),
+                          CMakeToWixPath(objectFilename))) {
       return false;
     }
 
-    objectFiles << " " << QuotePath(objectFilename);
+    objectFiles << " " << QuotePath(CMakeToWixPath(objectFilename));
   }
 
   AppendUserSuppliedExtraObjects(objectFiles);
@@ -306,8 +309,8 @@ void cmCPackWIXGenerator::AppendUserSuppliedExtraObjects(std::ostream& stream)
   cmSystemTools::ExpandListArgument(cpackWixExtraObjects,
                                     expandedExtraObjects);
 
-  for (size_t i = 0; i < expandedExtraObjects.size(); ++i) {
-    stream << " " << QuotePath(expandedExtraObjects[i]);
+  for (std::string const& obj : expandedExtraObjects) {
+    stream << " " << QuotePath(obj);
   }
 }
 
@@ -324,10 +327,10 @@ void cmCPackWIXGenerator::CreateWiXVariablesIncludeFile()
   CopyDefinition(includeFile, "CPACK_PACKAGE_VENDOR");
   CopyDefinition(includeFile, "CPACK_PACKAGE_NAME");
   CopyDefinition(includeFile, "CPACK_PACKAGE_VERSION");
-  CopyDefinition(includeFile, "CPACK_WIX_LICENSE_RTF");
-  CopyDefinition(includeFile, "CPACK_WIX_PRODUCT_ICON");
-  CopyDefinition(includeFile, "CPACK_WIX_UI_BANNER");
-  CopyDefinition(includeFile, "CPACK_WIX_UI_DIALOG");
+  CopyDefinition(includeFile, "CPACK_WIX_LICENSE_RTF", DefinitionType::PATH);
+  CopyDefinition(includeFile, "CPACK_WIX_PRODUCT_ICON", DefinitionType::PATH);
+  CopyDefinition(includeFile, "CPACK_WIX_UI_BANNER", DefinitionType::PATH);
+  CopyDefinition(includeFile, "CPACK_WIX_UI_DIALOG", DefinitionType::PATH);
   SetOptionIfNotSet("CPACK_WIX_PROGRAM_MENU_FOLDER",
                     GetOption("CPACK_PACKAGE_NAME"));
   CopyDefinition(includeFile, "CPACK_WIX_PROGRAM_MENU_FOLDER");
@@ -345,9 +348,7 @@ void cmCPackWIXGenerator::CreateWiXPropertiesIncludeFile()
   std::string prefix = "CPACK_WIX_PROPERTY_";
   std::vector<std::string> options = GetOptions();
 
-  for (size_t i = 0; i < options.size(); ++i) {
-    std::string const& name = options[i];
-
+  for (std::string const& name : options) {
     if (name.length() > prefix.length() &&
         name.substr(0, prefix.length()) == prefix) {
       std::string id = name.substr(prefix.length());
@@ -396,11 +397,16 @@ void cmCPackWIXGenerator::CreateWiXProductFragmentIncludeFile()
 }
 
 void cmCPackWIXGenerator::CopyDefinition(cmWIXSourceWriter& source,
-                                         std::string const& name)
+                                         std::string const& name,
+                                         DefinitionType type)
 {
   const char* value = GetOption(name.c_str());
   if (value) {
-    AddDefinition(source, name, value);
+    if (type == DefinitionType::PATH) {
+      AddDefinition(source, name, CMakeToWixPath(value));
+    } else {
+      AddDefinition(source, name, value);
+    }
   }
 }
 
@@ -503,16 +509,14 @@ bool cmCPackWIXGenerator::CreateWiXSourceFiles()
 
     globalShortcuts.AddShortcutTypes(emittedShortcutTypes);
   } else {
-    for (std::map<std::string, cmCPackComponent>::const_iterator i =
-           this->Components.begin();
-         i != this->Components.end(); ++i) {
-      cmCPackComponent const& component = i->second;
+    for (auto const& i : this->Components) {
+      cmCPackComponent const& component = i.second;
 
       std::string componentPath = toplevel;
       componentPath += "/";
       componentPath += component.Name;
 
-      std::string componentFeatureId = "CM_C_" + component.Name;
+      std::string const componentFeatureId = "CM_C_" + component.Name;
 
       cmWIXShortcuts featureShortcuts;
       AddComponentsToFeature(componentPath, componentFeatureId,
@@ -623,19 +627,15 @@ bool cmCPackWIXGenerator::GenerateMainSourceFileFromTemplate()
 bool cmCPackWIXGenerator::CreateFeatureHierarchy(
   cmWIXFeaturesSourceWriter& featureDefinitions)
 {
-  for (std::map<std::string, cmCPackComponentGroup>::const_iterator i =
-         ComponentGroups.begin();
-       i != ComponentGroups.end(); ++i) {
-    cmCPackComponentGroup const& group = i->second;
+  for (auto const& i : ComponentGroups) {
+    cmCPackComponentGroup const& group = i.second;
     if (group.ParentGroup == 0) {
       featureDefinitions.EmitFeatureForComponentGroup(group, *this->Patch);
     }
   }
 
-  for (std::map<std::string, cmCPackComponent>::const_iterator i =
-         this->Components.begin();
-       i != this->Components.end(); ++i) {
-    cmCPackComponent const& component = i->second;
+  for (auto const& i : this->Components) {
+    cmCPackComponent const& component = i.second;
 
     if (!component.Group) {
       featureDefinitions.EmitFeatureForComponent(component, *this->Patch);
@@ -978,6 +978,7 @@ std::string cmCPackWIXGenerator::GetArchitecture() const
 
 std::string cmCPackWIXGenerator::GenerateGUID()
 {
+#ifdef _WIN32
   UUID guid;
   UuidCreate(&guid);
 
@@ -987,6 +988,14 @@ std::string cmCPackWIXGenerator::GenerateGUID()
   std::string result =
     cmsys::Encoding::ToNarrow(reinterpret_cast<wchar_t*>(tmp));
   RpcStringFreeW(&tmp);
+#else
+  uuid_t guid;
+  char guid_ch[37] = { 0 };
+
+  uuid_generate(guid);
+  uuid_unparse(guid, guid_ch);
+  std::string result = guid_ch;
+#endif
 
   return cmSystemTools::UpperCase(result);
 }
@@ -1135,9 +1144,8 @@ void cmCPackWIXGenerator::AddCustomFlags(std::string const& variableName,
   std::vector<std::string> list;
   cmSystemTools::ExpandListArgument(variableContent, list);
 
-  for (std::vector<std::string>::const_iterator i = list.begin();
-       i != list.end(); ++i) {
-    stream << " " << QuotePath(*i);
+  for (std::string const& i : list) {
+    stream << " " << QuotePath(i);
   }
 }
 

@@ -69,8 +69,8 @@ public:
     names.push_back(vs15generatorName + std::string(" Win64"));
   }
 
-  bool SupportsToolset() const CM_OVERRIDE { return true; }
-  bool SupportsPlatform() const CM_OVERRIDE { return true; }
+  bool SupportsToolset() const override { return true; }
+  bool SupportsPlatform() const override { return true; }
 };
 
 cmGlobalGeneratorFactory* cmGlobalVisualStudio15Generator::NewFactory()
@@ -109,6 +109,53 @@ void cmGlobalVisualStudio15Generator::WriteSLNHeader(std::ostream& fout)
   } else {
     fout << "# Visual Studio 15\n";
   }
+}
+
+bool cmGlobalVisualStudio15Generator::SetGeneratorInstance(
+  std::string const& i, cmMakefile* mf)
+{
+  if (!i.empty()) {
+    if (!this->vsSetupAPIHelper.SetVSInstance(i)) {
+      std::ostringstream e;
+      /* clang-format off */
+      e <<
+        "Generator\n"
+        "  " << this->GetName() << "\n"
+        "could not find specified instance of Visual Studio:\n"
+        "  " << i;
+      /* clang-format on */
+      mf->IssueMessage(cmake::FATAL_ERROR, e.str());
+      return false;
+    }
+  }
+
+  std::string vsInstance;
+  if (!this->vsSetupAPIHelper.GetVSInstanceInfo(vsInstance)) {
+    std::ostringstream e;
+    /* clang-format off */
+    e <<
+      "Generator\n"
+      "  " << this->GetName() << "\n"
+      "could not find any instance of Visual Studio.\n";
+    /* clang-format on */
+    mf->IssueMessage(cmake::FATAL_ERROR, e.str());
+    return false;
+  }
+
+  // Save the selected instance persistently.
+  std::string genInstance = mf->GetSafeDefinition("CMAKE_GENERATOR_INSTANCE");
+  if (vsInstance != genInstance) {
+    this->CMakeInstance->AddCacheEntry(
+      "CMAKE_GENERATOR_INSTANCE", vsInstance.c_str(),
+      "Generator instance identifier.", cmStateEnums::INTERNAL);
+  }
+
+  return true;
+}
+
+bool cmGlobalVisualStudio15Generator::GetVSInstance(std::string& dir) const
+{
+  return vsSetupAPIHelper.GetVSInstanceInfo(dir);
 }
 
 bool cmGlobalVisualStudio15Generator::InitializeWindows(cmMakefile* mf)

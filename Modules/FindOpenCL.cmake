@@ -37,7 +37,7 @@ function(_FIND_OPENCL_VERSION)
   set(CMAKE_REQUIRED_QUIET ${OpenCL_FIND_QUIETLY})
 
   CMAKE_PUSH_CHECK_STATE()
-  foreach(VERSION "2_0" "1_2" "1_1" "1_0")
+  foreach(VERSION "2_2" "2_1" "2_0" "1_2" "1_1" "1_0")
     set(CMAKE_REQUIRED_INCLUDES "${OpenCL_INCLUDE_DIR}")
 
     if(APPLE)
@@ -76,6 +76,7 @@ find_path(OpenCL_INCLUDE_DIR
     ENV NVSDKCOMPUTE_ROOT
     ENV CUDA_PATH
     ENV ATISTREAMSDKROOT
+    ENV OCL_ROOT
   PATH_SUFFIXES
     include
     OpenCL/common/inc
@@ -94,6 +95,7 @@ if(WIN32)
         ENV CUDA_PATH
         ENV NVSDKCOMPUTE_ROOT
         ENV ATISTREAMSDKROOT
+        ENV OCL_ROOT
       PATH_SUFFIXES
         "AMD APP/lib/x86"
         lib/x86
@@ -109,6 +111,7 @@ if(WIN32)
         ENV CUDA_PATH
         ENV NVSDKCOMPUTE_ROOT
         ENV ATISTREAMSDKROOT
+        ENV OCL_ROOT
       PATH_SUFFIXES
         "AMD APP/lib/x86_64"
         lib/x86_64
@@ -120,9 +123,12 @@ else()
     NAMES OpenCL
     PATHS
       ENV AMDAPPSDKROOT
+      ENV CUDA_PATH
     PATH_SUFFIXES
       lib/x86_64
-      lib/x64)
+      lib/x64
+      lib
+      lib64)
 endif()
 
 set(OpenCL_LIBRARIES ${OpenCL_LIBRARY})

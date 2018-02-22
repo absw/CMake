@@ -2,8 +2,6 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmUnsetCommand.h"
 
-#include <string.h>
-
 #include "cmAlgorithms.h"
 #include "cmMakefile.h"
 #include "cmSystemTools.h"
@@ -19,19 +17,16 @@ bool cmUnsetCommand::InitialPass(std::vector<std::string> const& args,
     return false;
   }
 
-  const char* variable = args[0].c_str();
+  auto const& variable = args[0];
 
   // unset(ENV{VAR})
-  if (cmHasLiteralPrefix(variable, "ENV{") && strlen(variable) > 5) {
+  if (cmHasLiteralPrefix(variable, "ENV{") && variable.size() > 5) {
     // what is the variable name
-    char* envVarName = new char[strlen(variable)];
-    strncpy(envVarName, variable + 4, strlen(variable) - 5);
-    envVarName[strlen(variable) - 5] = '\0';
+    auto const& envVarName = variable.substr(4, variable.size() - 5);
 
 #ifdef CMAKE_BUILD_WITH_CMAKE
-    cmSystemTools::UnsetEnv(envVarName);
+    cmSystemTools::UnsetEnv(envVarName.c_str());
 #endif
-    delete[] envVarName;
     return true;
   }
   // unset(VAR)
@@ -46,7 +41,7 @@ bool cmUnsetCommand::InitialPass(std::vector<std::string> const& args,
   }
   // unset(VAR PARENT_SCOPE)
   if ((args.size() == 2) && (args[1] == "PARENT_SCOPE")) {
-    this->Makefile->RaiseScope(variable, CM_NULLPTR);
+    this->Makefile->RaiseScope(variable, nullptr);
     return true;
   }
   // ERROR: second argument isn't CACHE or PARENT_SCOPE

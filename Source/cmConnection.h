@@ -3,8 +3,9 @@
 
 #pragma once
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
+#include "cmUVHandlePtr.h"
 #include "cm_uv.h"
 
 #include <cstddef>
@@ -38,6 +39,17 @@ public:
    */
   virtual std::string BufferMessage(std::string& rawBuffer) = 0;
 
+  /***
+   * Called to properly buffer an outgoing message.
+   *
+   * @param rawBuffer Message to format in the correct way
+   *
+   * @return Formatted message
+   */
+  virtual std::string BufferOutMessage(const std::string& rawBuffer) const
+  {
+    return rawBuffer;
+  };
   /***
    * Resets the internal state of the buffering
    */
@@ -96,13 +108,18 @@ public:
   bool OnConnectionShuttingDown() override;
 
   virtual void OnDisconnect(int errorCode);
-  uv_stream_t* ReadStream = nullptr;
-  uv_stream_t* WriteStream = nullptr;
 
   static void on_close(uv_handle_t* handle);
-  static void on_close_delete(uv_handle_t* handle);
+
+  template <typename T>
+  static void on_close_delete(uv_handle_t* handle)
+  {
+    delete reinterpret_cast<T*>(handle);
+  }
 
 protected:
+  cm::uv_stream_ptr WriteStream;
+
   std::string RawReadBuffer;
 
   std::unique_ptr<cmConnectionBufferStrategy> BufferStrategy;

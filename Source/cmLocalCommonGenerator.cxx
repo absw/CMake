@@ -2,6 +2,7 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmLocalCommonGenerator.h"
 
+#include <utility>
 #include <vector>
 
 #include "cmGeneratorTarget.h"
@@ -22,7 +23,7 @@ cmLocalCommonGenerator::cmLocalCommonGenerator(cmGlobalGenerator* gg,
     this->ConfigName = config;
   } else {
     // No configuration type given.
-    this->ConfigName = "";
+    this->ConfigName.clear();
   }
 }
 
@@ -67,13 +68,26 @@ std::string cmLocalCommonGenerator::GetTargetFortranFlags(
         this->Makefile->GetDefinition("CMAKE_Fortran_MODPATH_FLAG")) {
     std::vector<std::string> includes;
     this->GetIncludeDirectories(includes, target, "C", config);
-    for (std::vector<std::string>::const_iterator idi = includes.begin();
-         idi != includes.end(); ++idi) {
+    for (std::string const& id : includes) {
       std::string flg = modpath_flag;
-      flg += this->ConvertToOutputFormat(*idi, cmOutputConverter::SHELL);
+      flg += this->ConvertToOutputFormat(id, cmOutputConverter::SHELL);
       this->AppendFlags(flags, flg);
     }
   }
 
   return flags;
+}
+
+void cmLocalCommonGenerator::ComputeObjectFilenames(
+  std::map<cmSourceFile const*, std::string>& mapping,
+  cmGeneratorTarget const* gt)
+{
+  // Determine if these object files should use a custom extension
+  char const* custom_ext = gt->GetCustomObjectExtension();
+  for (auto& si : mapping) {
+    cmSourceFile const* sf = si.first;
+    bool keptSourceExtension;
+    si.second = this->GetObjectFileNameWithoutTarget(
+      *sf, gt->ObjectDirectory, &keptSourceExtension, custom_ext);
+  }
 }

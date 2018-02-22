@@ -63,7 +63,7 @@ bool cmIncludeCommand::InitialPass(std::vector<std::string> const& args,
     return true;
   }
 
-  if (!cmSystemTools::FileIsFullPath(fname.c_str())) {
+  if (!cmSystemTools::FileIsFullPath(fname)) {
     // Not a path. Maybe module.
     std::string module = fname;
     module += ".cmake";
@@ -78,7 +78,7 @@ bool cmIncludeCommand::InitialPass(std::vector<std::string> const& args,
 
   cmGlobalGenerator* gg = this->Makefile->GetGlobalGenerator();
   if (gg->IsExportedTargetsFile(fname_abs)) {
-    const char* modal = CM_NULLPTR;
+    const char* modal = nullptr;
     std::ostringstream e;
     cmake::MessageType messageType = cmake::AUTHOR_WARNING;
 
@@ -112,7 +112,7 @@ bool cmIncludeCommand::InitialPass(std::vector<std::string> const& args,
 
   std::string listFile = cmSystemTools::CollapseFullPath(
     fname, this->Makefile->GetCurrentSourceDirectory());
-  if (optional && !cmSystemTools::FileExists(listFile.c_str())) {
+  if (optional && !cmSystemTools::FileExists(listFile)) {
     if (!resultVarName.empty()) {
       this->Makefile->AddDefinition(resultVarName, "NOTFOUND");
     }

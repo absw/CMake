@@ -21,22 +21,12 @@ bool cmTargetIncludeDirectoriesCommand::InitialPass(
                                ArgumentFlags(PROCESS_BEFORE | PROCESS_SYSTEM));
 }
 
-void cmTargetIncludeDirectoriesCommand::HandleImportedTarget(
-  const std::string& tgt)
-{
-  std::ostringstream e;
-  e << "Cannot specify include directories for imported target \"" << tgt
-    << "\".";
-  this->Makefile->IssueMessage(cmake::FATAL_ERROR, e.str());
-}
-
 void cmTargetIncludeDirectoriesCommand::HandleMissingTarget(
   const std::string& name)
 {
   std::ostringstream e;
   e << "Cannot specify include directories for target \"" << name
-    << "\" "
-       "which is not built by this project.";
+    << "\" which is not built by this project.";
   this->Makefile->IssueMessage(cmake::FATAL_ERROR, e.str());
 }
 
@@ -47,13 +37,12 @@ std::string cmTargetIncludeDirectoriesCommand::Join(
   std::string sep;
   std::string prefix =
     this->Makefile->GetCurrentSourceDirectory() + std::string("/");
-  for (std::vector<std::string>::const_iterator it = content.begin();
-       it != content.end(); ++it) {
-    if (cmSystemTools::FileIsFullPath(it->c_str()) ||
-        cmGeneratorExpression::Find(*it) == 0) {
-      dirs += sep + *it;
+  for (std::string const& it : content) {
+    if (cmSystemTools::FileIsFullPath(it) ||
+        cmGeneratorExpression::Find(it) == 0) {
+      dirs += sep + it;
     } else {
-      dirs += sep + prefix + *it;
+      dirs += sep + prefix + it;
     }
     sep = ";";
   }
@@ -70,18 +59,17 @@ bool cmTargetIncludeDirectoriesCommand::HandleDirectContent(
     std::string prefix =
       this->Makefile->GetCurrentSourceDirectory() + std::string("/");
     std::set<std::string> sdirs;
-    for (std::vector<std::string>::const_iterator it = content.begin();
-         it != content.end(); ++it) {
-      if (cmSystemTools::FileIsFullPath(it->c_str()) ||
-          cmGeneratorExpression::Find(*it) == 0) {
-        sdirs.insert(*it);
+    for (std::string const& it : content) {
+      if (cmSystemTools::FileIsFullPath(it) ||
+          cmGeneratorExpression::Find(it) == 0) {
+        sdirs.insert(it);
       } else {
-        sdirs.insert(prefix + *it);
+        sdirs.insert(prefix + it);
       }
     }
     tgt->AddSystemIncludeDirectories(sdirs);
   }
-  return true;
+  return true; // Successfully handled.
 }
 
 void cmTargetIncludeDirectoriesCommand::HandleInterfaceContent(

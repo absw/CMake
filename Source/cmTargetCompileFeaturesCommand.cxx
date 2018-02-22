@@ -17,15 +17,6 @@ bool cmTargetCompileFeaturesCommand::InitialPass(
   return this->HandleArguments(args, "COMPILE_FEATURES", NO_FLAGS);
 }
 
-void cmTargetCompileFeaturesCommand::HandleImportedTarget(
-  const std::string& tgt)
-{
-  std::ostringstream e;
-  e << "Cannot specify compile features for imported target \"" << tgt
-    << "\".";
-  this->Makefile->IssueMessage(cmake::FATAL_ERROR, e.str());
-}
-
 void cmTargetCompileFeaturesCommand::HandleMissingTarget(
   const std::string& name)
 {
@@ -45,13 +36,12 @@ std::string cmTargetCompileFeaturesCommand::Join(
 bool cmTargetCompileFeaturesCommand::HandleDirectContent(
   cmTarget* tgt, const std::vector<std::string>& content, bool, bool)
 {
-  for (std::vector<std::string>::const_iterator it = content.begin();
-       it != content.end(); ++it) {
+  for (std::string const& it : content) {
     std::string error;
-    if (!this->Makefile->AddRequiredTargetFeature(tgt, *it, &error)) {
+    if (!this->Makefile->AddRequiredTargetFeature(tgt, it, &error)) {
       this->SetError(error);
-      return false;
+      return false; // Not (successfully) handled.
     }
   }
-  return true;
+  return true; // Successfully handled.
 }

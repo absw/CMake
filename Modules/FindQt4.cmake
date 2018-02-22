@@ -355,19 +355,21 @@ macro (_QT4_ADJUST_LIB_VARS _camelCaseBasename)
 
       if (QT_${basename}_LIBRARY_RELEASE)
         set_property(TARGET Qt4::${_camelCaseBasename} APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
-        if(QT_USE_FRAMEWORKS)
-          set_property(TARGET Qt4::${_camelCaseBasename}        PROPERTY IMPORTED_LOCATION_RELEASE "${QT_${basename}_LIBRARY_RELEASE}/${_camelCaseBasename}" )
+        set(_location "${QT_${basename}_LIBRARY_RELEASE}")
+        if(QT_USE_FRAMEWORKS AND EXISTS ${_location}/${_camelCaseBasename})
+          set_property(TARGET Qt4::${_camelCaseBasename}        PROPERTY IMPORTED_LOCATION_RELEASE "${_location}/${_camelCaseBasename}" )
         else()
-          set_property(TARGET Qt4::${_camelCaseBasename}        PROPERTY IMPORTED_LOCATION_RELEASE "${QT_${basename}_LIBRARY_RELEASE}" )
+          set_property(TARGET Qt4::${_camelCaseBasename}        PROPERTY IMPORTED_LOCATION_RELEASE "${_location}" )
         endif()
       endif ()
 
       if (QT_${basename}_LIBRARY_DEBUG)
         set_property(TARGET Qt4::${_camelCaseBasename} APPEND PROPERTY IMPORTED_CONFIGURATIONS DEBUG)
-        if(QT_USE_FRAMEWORKS)
-          set_property(TARGET Qt4::${_camelCaseBasename}        PROPERTY IMPORTED_LOCATION_DEBUG "${QT_${basename}_LIBRARY_DEBUG}/${_camelCaseBasename}" )
+        set(_location "${QT_${basename}_LIBRARY_DEBUG}")
+        if(QT_USE_FRAMEWORKS AND EXISTS ${_location}/${_camelCaseBasename})
+          set_property(TARGET Qt4::${_camelCaseBasename}        PROPERTY IMPORTED_LOCATION_DEBUG "${_location}/${_camelCaseBasename}" )
         else()
-          set_property(TARGET Qt4::${_camelCaseBasename}        PROPERTY IMPORTED_LOCATION_DEBUG "${QT_${basename}_LIBRARY_DEBUG}" )
+          set_property(TARGET Qt4::${_camelCaseBasename}        PROPERTY IMPORTED_LOCATION_DEBUG "${_location}" )
         endif()
       endif ()
       set_property(TARGET Qt4::${_camelCaseBasename} PROPERTY
@@ -396,13 +398,14 @@ macro (_QT4_ADJUST_LIB_VARS _camelCaseBasename)
 
       # if the release- as well as the debug-version of the library have been found:
       if (QT_${basename}_LIBRARY_DEBUG AND QT_${basename}_LIBRARY_RELEASE)
-        # if the generator supports configuration types then set
-        # optimized and debug libraries, or if the CMAKE_BUILD_TYPE has a value
-        if (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
+        # if the generator is multi-config or if CMAKE_BUILD_TYPE is set for
+        # single-config generators, set optimized and debug libraries
+        get_property(_isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+        if(_isMultiConfig OR CMAKE_BUILD_TYPE)
           set(QT_${basename}_LIBRARY       optimized ${QT_${basename}_LIBRARY_RELEASE} debug ${QT_${basename}_LIBRARY_DEBUG})
         else()
-          # if there are no configuration types and CMAKE_BUILD_TYPE has no value
-          # then just use the release libraries
+          # For single-config generators where CMAKE_BUILD_TYPE has no value,
+          # just use the release libraries
           set(QT_${basename}_LIBRARY       ${QT_${basename}_LIBRARY_RELEASE} )
         endif()
         set(QT_${basename}_LIBRARIES       optimized ${QT_${basename}_LIBRARY_RELEASE} debug ${QT_${basename}_LIBRARY_DEBUG})
@@ -707,13 +710,19 @@ if (QT_QMAKE_EXECUTABLE AND
   if (QT_LIBRARY_DIR AND NOT QT_PLUGINS_DIR  OR  QT_QMAKE_CHANGED)
     _qt4_query_qmake(QT_INSTALL_PLUGINS qt_plugins_dir)
     set(QT_PLUGINS_DIR NOTFOUND)
+    set(qt_cross_paths)
     foreach(qt_cross_path ${CMAKE_FIND_ROOT_PATH})
       set(qt_cross_paths ${qt_cross_paths} "${qt_cross_path}/plugins")
     endforeach()
-    find_path(QT_PLUGINS_DIR NAMES accessible imageformats sqldrivers codecs designer
+    find_path(QT_PLUGINS_DIR
+      NAMES accessible bearer codecs designer graphicssystems iconengines imageformats inputmethods qmltooling script sqldrivers
       HINTS ${qt_cross_paths} ${qt_plugins_dir}
       DOC "The location of the Qt plugins"
       NO_CMAKE_FIND_ROOT_PATH)
+    # If no plugins were installed, set QT_PLUGINS_DIR to ${qt_plugins_dir}
+    if(NOT QT_PLUGINS_DIR AND qt_plugins_dir)
+      set(QT_PLUGINS_DIR ${qt_plugins_dir} CACHE PATH "The location of the Qt plugins")
+    endif()
   endif ()
 
   # ask qmake for the translations directory
@@ -727,6 +736,7 @@ if (QT_QMAKE_EXECUTABLE AND
     _qt4_query_qmake(QT_INSTALL_IMPORTS qt_imports_dir)
     if(qt_imports_dir)
       set(QT_IMPORTS_DIR NOTFOUND)
+      set(qt_cross_paths)
       foreach(qt_cross_path ${CMAKE_FIND_ROOT_PATH})
         set(qt_cross_paths ${qt_cross_paths} "${qt_cross_path}/imports")
       endforeach()
@@ -736,6 +746,10 @@ if (QT_QMAKE_EXECUTABLE AND
         NO_CMAKE_FIND_ROOT_PATH
         NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH
         NO_CMAKE_SYSTEM_PATH)
+      # If the imports folder is empty, set QT_IMPORTS_DIR to ${qt_imports_dir}
+      if(NOT QT_IMPORTS_DIR AND qt_imports_dir)
+        set(QT_IMPORTS_DIR ${qt_imports_dir} CACHE PATH "The location of the Qt imports")
+      endif()
       mark_as_advanced(QT_IMPORTS_DIR)
     endif()
   endif ()

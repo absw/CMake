@@ -3,12 +3,13 @@
 
 #include "cmTargetPropertyComputer.h"
 
+#include <cctype>
 #include <sstream>
+#include <unordered_set>
 
 #include "cmMessenger.h"
 #include "cmPolicies.h"
 #include "cmStateSnapshot.h"
-#include "cm_unordered_set.hxx"
 #include "cmake.h"
 
 bool cmTargetPropertyComputer::HandleLocationPropertyPolicy(
@@ -16,7 +17,7 @@ bool cmTargetPropertyComputer::HandleLocationPropertyPolicy(
   cmListFileBacktrace const& context)
 {
   std::ostringstream e;
-  const char* modal = CM_NULLPTR;
+  const char* modal = nullptr;
   cmake::MessageType messageType = cmake::AUTHOR_WARNING;
   switch (context.GetBottom().GetPolicy(cmPolicies::CMP0026)) {
     case cmPolicies::WARN:
@@ -49,7 +50,13 @@ bool cmTargetPropertyComputer::WhiteListedInterfaceProperty(
   if (cmHasLiteralPrefix(prop, "INTERFACE_")) {
     return true;
   }
-  static CM_UNORDERED_SET<std::string> builtIns;
+  if (cmHasLiteralPrefix(prop, "_")) {
+    return true;
+  }
+  if (std::islower(prop[0])) {
+    return true;
+  }
+  static std::unordered_set<std::string> builtIns;
   if (builtIns.empty()) {
     builtIns.insert("COMPATIBLE_INTERFACE_BOOL");
     builtIns.insert("COMPATIBLE_INTERFACE_NUMBER_MAX");
@@ -57,6 +64,7 @@ bool cmTargetPropertyComputer::WhiteListedInterfaceProperty(
     builtIns.insert("COMPATIBLE_INTERFACE_STRING");
     builtIns.insert("EXPORT_NAME");
     builtIns.insert("IMPORTED");
+    builtIns.insert("IMPORTED_GLOBAL");
     builtIns.insert("NAME");
     builtIns.insert("TYPE");
   }
@@ -66,9 +74,16 @@ bool cmTargetPropertyComputer::WhiteListedInterfaceProperty(
   }
 
   if (prop == "IMPORTED_CONFIGURATIONS" || prop == "IMPORTED_LIBNAME" ||
-      prop == "NO_SYSTEM_FROM_IMPORTED" ||
       cmHasLiteralPrefix(prop, "IMPORTED_LIBNAME_") ||
       cmHasLiteralPrefix(prop, "MAP_IMPORTED_CONFIG_")) {
+    return true;
+  }
+
+  // This property should not be allowed but was incorrectly added in
+  // CMake 3.8.  We can't remove it from the whitelist without breaking
+  // projects that try to set it.  One day we could warn about this, but
+  // for now silently accept it.
+  if (prop == "NO_SYSTEM_FROM_IMPORTED") {
     return true;
   }
 
