@@ -617,6 +617,10 @@ void cmGlobalIarGenerator::Generate()
   const cmMakefile* globalMakefile = lgs0->GetMakefile();
 
   GLOBALCFG.buildType = globalMakefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
+  if (GLOBALCFG.buildType == "")
+  {
+      GLOBALCFG.buildType = "Debug";
+  }
   std::string flagsWithType = std::string("CMAKE_C_FLAGS_") + cmSystemTools::UpperCase(GLOBALCFG.buildType);
 
   GLOBALCFG.iarCCompilerFlags = globalMakefile->GetSafeDefinition("CMAKE_C_FLAGS");
@@ -1306,11 +1310,10 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   IarSettings* generalSettings = new IarSettings("General", 3);
   config->AddChild(generalSettings);
 
-  IarData* generalData = generalSettings->NewData(21, true, this->buildCfg.isDebug);
+  IarData* generalData = generalSettings->NewData(24, true, this->buildCfg.isDebug);
   generalData->NewOption("ExePath")->NewState(this->buildCfg.exeDir);
   generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir + "/" + this->name);
   generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir + "/" + this->name);
-  generalData->NewOption("Variant", 20)->NewState("42");
   generalData->NewOption("GEndianMode")->NewState("0");
 
 
@@ -1327,7 +1330,6 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
                 ->NewState("No specifier a, A, without multibyte support.");
   generalData->NewOption("GOutputBinary")
                 ->NewState(this->isLib ? "1" : "0");
-  generalData->NewOption("FPU", 2)->NewState("3");
   generalData->NewOption("OGCoreOrChip")->NewState("1");
 
 
@@ -1373,7 +1375,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
                     "11111001111011111011111111111111111");
   generalData->NewOption("RTConfigPath2")
               ->NewState(std::string("$TOOLKIT_DIR$\\INC\\c\\DLib_Config_") + cmGlobalIarGenerator::GLOBALCFG.compilerDlibConfig + ".h");
-  generalData->NewOption("GFPUCoreSlave", 20)->NewState("42");
+  generalData->NewOption("GFPUCoreSlave2", 20)->NewState("42");
   generalData->NewOption("GBECoreSlave", 20)->NewState("42");
   generalData->NewOption("OGUseCmsis")->NewState("0");
   generalData->NewOption("OGUseCmsisDspLib")->NewState("0");
