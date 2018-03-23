@@ -1141,19 +1141,18 @@ void cmGlobalIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
       sourceFilesVector.begin();
       it != sourceFilesVector.end();
       ++it)
-    {
+  {
     project->sources.push_back((*it)->GetFullPath());
-    }
+  }
 
   // Compose build configuration
-
   std::vector<cmTarget*> owned = makeFile->GetOwnedImportedTargets();
 
   cmGlobalIarGenerator::BuildConfig buildCfg;
   buildCfg.name = GLOBALCFG.buildType;
   buildCfg.isDebug = (GLOBALCFG.buildType == "Debug");
   buildCfg.exeDir = buildCfg.name + "/Exe";
-  buildCfg.objectDir = buildCfg.name + "/Object";
+  buildCfg.objectDir = buildCfg.name + "/Obj";
   buildCfg.listDir = buildCfg.name + "/Lst";
   buildCfg.toolchain = GLOBALCFG.tgtArch;
   buildCfg.outputFile = genTgt->GetExportName();
@@ -1161,10 +1160,19 @@ void cmGlobalIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
   buildCfg.preBuildCmd = "";
   buildCfg.postBuildCmd = "";
 
+  buildCfg.icfPath = GLOBALCFG.linkerIcfFile;
+
+  // Get target-specific properties
+  const auto &targetProperties = tgt.GetProperties();
+  const std::string LinkerIcfFilePropertyId = "IAR_LINKER_ICF_FILE";
+  const auto LinkerIcfFile = targetProperties.GetPropertyValue(LinkerIcfFilePropertyId);
+  if (LinkerIcfFile != nullptr)
+  {
+    buildCfg.icfPath = LinkerIcfFile;
+  }
+
   std::string prebuild = project->binaryDir + "/" + buildCfg.exeDir+"/"+project->name+"_prebuild.bat";
   std::string postbuild = project->binaryDir + "/" + buildCfg.exeDir+"/"+project->name+"_postbuild.bat";
-
-  buildCfg.icfPath = GLOBALCFG.linkerIcfFile;
 
   // Prebuild & postbuild.
   std::string buildCmd = "";
@@ -1314,7 +1322,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   IarSettings* generalSettings = new IarSettings("General", 3);
   config->AddChild(generalSettings);
 
-  IarData* generalData = generalSettings->NewData(24, true, this->buildCfg.isDebug);
+  IarData* generalData = generalSettings->NewData(29, true, this->buildCfg.isDebug);
   generalData->NewOption("ExePath")->NewState(this->buildCfg.exeDir + "/" + this->name);
   generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir + "/" + this->name);
   generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir + "/" + this->name);
@@ -1326,10 +1334,10 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
 
   generalData->NewOption("OGPrintfVariant", 0)->NewState(pPrintfIdStr);
   generalData->NewOption("Input description")
-              ->NewState("Automatic choice of formatter, without multibyte support.");
+              ->NewState("Automatic choice of formatter.");
   generalData->NewOption("OGScanfVariant", 0)->NewState(pScanfIdStr);
   generalData->NewOption("Output description")
-                ->NewState("Automatic choice of formatter, without multibyte support.");
+                ->NewState("Automatic choice of formatter.");
   generalData->NewOption("GOutputBinary")
                 ->NewState(this->isLib ? "1" : "0");
   generalData->NewOption("OGCoreOrChip")->NewState("1");
@@ -1753,7 +1761,9 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
             ->NewState(GLOBALCFG.wbVersion);
     cspyData->NewOption("OCDownloadAttachToProgram")->NewState("0");
 
-    cspyData->NewOption("UseFlashLoader")->NewState("0");
+    cspyData->NewOption("UseFlashLoader")
+      ->NewState(cmSystemTools::IsOn(GLOBALCFG.linkerUseFlashLoader.c_str()) ? 
+        "1" : "0");
     cspyData->NewOption("CLowLevel")->NewState("1");
     cspyData->NewOption("OCBE8Slave")->NewState("1");
     cspyData->NewOption("MacFile2")->NewState("");
