@@ -609,7 +609,7 @@ void cmGlobalIarGenerator::Generate()
   const cmMakefile* globalMakefile = lgs0->GetMakefile();
 
   GLOBALCFG.buildType = globalMakefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
-  if (GLOBALCFG.buildType == "")
+  if (GLOBALCFG.buildType.empty())
   {
       GLOBALCFG.buildType = "Debug";
   }
@@ -1428,10 +1428,10 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCCodeSection")->NewState(".text");
   iccArmData->NewOption("IInterwork2")->NewState("0");
   iccArmData->NewOption("IProcessorMode2")->NewState("1");
-  iccArmData->NewOption("CCOptLevel")->NewState(this->buildCfg.isDebug ? "0" : "3");
+  iccArmData->NewOption("CCOptLevel")->NewState(GLOBALCFG.CCOptLevel.empty() ? "1" : GLOBALCFG.CCOptLevel);
   iccArmData->NewOption("CCOptStrategy", 0)->NewState("1");
   iccArmData->NewOption("CCOptLevelSlave")
-                ->NewState(this->buildCfg.isDebug ? "0" : "3");
+                ->NewState(GLOBALCFG.CCOptLevel.empty() ? "1" : GLOBALCFG.CCOptLevel);
   iccArmData->NewOption("CompilerMisraRules98", 0)
                 ->NewState("100011111011010110111001110011111110111001101100010111"
                     "011110110110011111111111110011001111100111011100111111"
@@ -1446,7 +1446,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("IccLang")->NewState("2");
   iccArmData->NewOption("IccCDialect")->NewState("1");
   iccArmData->NewOption("IccAllowVLA")->NewState("0");
-  iccArmData->NewOption("IccCppDialect")->NewState("2");
+  iccArmData->NewOption("IccCppDialect")->NewState("1");
   iccArmData->NewOption("IccExceptions")->NewState("0");
   iccArmData->NewOption("IccRTTI")->NewState("0");
   iccArmData->NewOption("IccStaticDestr")->NewState("0");
@@ -1562,7 +1562,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   ilinkData->NewOption("IlinkLogModule")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogSection")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogVeneer")->NewState(this->buildCfg.isDebug ? "1" : "0");
-  ilinkData->NewOption("IlinkIcfOverride")->NewState((buildCfg.icfPath == "") ? "0" : "1");
+  ilinkData->NewOption("IlinkIcfOverride")->NewState((buildCfg.icfPath.empty()) ? "0" : "1");
   ilinkData->NewOption("IlinkIcfFile")->NewState(this->buildCfg.icfPath);
   ilinkData->NewOption("IlinkIcfFileSlave")->NewState("");
   ilinkData->NewOption("IlinkEnableRemarks")->NewState("1");
