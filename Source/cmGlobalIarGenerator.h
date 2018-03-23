@@ -342,11 +342,18 @@ private:
     std::string dbgLogFile          ;
     std::string linkerEntryRoutine  ;
     std::string linkerIcfFile       ;
+    std::string linkerUseFlashLoader;
     std::string tgtArch             ;
     std::string wbVersion           ;
     std::string chipSelection       ;
     std::string rtos                ;
     std::string compilerPreInclude  ;
+    std::string genLowLevelInterface;
+    std::string CCEnableRemarks     ;
+    std::string CCDiagSuppress      ;
+    std::string CCDiagWarnAreErr    ;
+    std::string CCOptLevel          ;
+    std::string CCOptLevelSlave     ;
     std::string scanfFmt  ;
     std::string printfFmt  ;
     int scanfFmtId  ;
