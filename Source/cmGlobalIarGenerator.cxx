@@ -586,30 +586,18 @@ void cmGlobalIarGenerator::GenerateBuildCommand(
   std::vector<std::string>& makeCommand, const std::string& makeProgram,
   const std::string& projectName, const std::string& projectDir,
   const std::string& targetName, const std::string& /*config*/, bool /*fast*/,
-  bool verbose, std::vector<std::string> const& makeOptions)
+  bool /*verbose*/, std::vector<std::string> const& /*makeOptions*/)
 {
-    if (targetName == "clean" || targetName == "preinstall")
-    {
-        makeCommand.push_back("echo");
-        makeCommand.push_back("Skipping target " + targetName);
-        return;
-    }
-  std::string projName = projectDir + "/" + targetName + ".ewp";
-
-  makeCommand.push_back(
-    this->SelectMakeProgram(makeProgram, this->FindIarBuildCommand()));
-
-  if (!targetName.empty()) {
-    std::string CommandArguments = projName + " -build " + cmGlobalIarGenerator::GLOBALCFG.buildType;
-    if (verbose)
-    {
-      CommandArguments += " -log all";
-    }
-      makeCommand.push_back(CommandArguments);
+  if (targetName == "clean" || targetName == "preinstall")
+  {
+    makeCommand.push_back("echo");
+    makeCommand.push_back("Skipping target " + targetName);
+    return;
   }
+  std::string projName = targetName + ".ewp";
+  std::string &scriptName = GenerateBuildScript(projName, projectDir);
 
-   makeCommand.insert(makeCommand.end(), makeOptions.begin(),
-     makeOptions.end());
+  makeCommand.push_back(scriptName);
 }
 
 
@@ -2183,6 +2171,49 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
 
   fclose(pFile);
 
+}
+
+
+std::string cmGlobalIarGenerator::GenerateBuildScript(const std::string &projectName, const std::string &workDir)
+{
+  std::string batFileName = workDir + "/BUILD_" + cmSystemTools::UpperCase(projectName) + ".bat";
+
+  std::string iarBuildCmd = cmGlobalIarGenerator::GLOBALCFG.iarArmPath;
+  std::size_t lastSlash = iarBuildCmd.find_last_of("/\\");
+  if (lastSlash != std::string::npos)
+  {
+    iarBuildCmd = iarBuildCmd.substr(0, lastSlash) + "/common/bin/IarBuild.exe";
+  }
+  else
+  {
+    iarBuildCmd = "IarBuild.exe";
+  }
+
+  std::replace(iarBuildCmd.begin(), iarBuildCmd.end(), '/', '\\');
+
+  FILE* pBatFile = fopen(batFileName.c_str(), "w");
+
+  std::string batchOutput = "";
+  batchOutput.reserve(1 << 20); // 1K.
+  batchOutput += "REM ===================================================\n";
+  batchOutput += "REM IAR BUILD (generated from CMake extraIarGenerator).\n";
+  batchOutput += "REM ===================================================\n\n";
+
+    std::string projPathWin = workDir + projectName;
+    std::replace(projPathWin.begin(), projPathWin.end(), '/', '\\');
+    batchOutput += "\"" + iarBuildCmd + "\" \""
+      + projPathWin + "\" -build "
+      + cmGlobalIarGenerator::GLOBALCFG.buildType + " -log all\n";
+
+  batchOutput += "\n\nREM ===================================================\n";
+  batchOutput += "REM END IAR BUILD.\n";
+  batchOutput += "REM ===================================================\n\n";
+
+  fwrite(batchOutput.c_str(), batchOutput.length(), 1, pBatFile);
+
+  fclose(pBatFile);
+
+  return batFileName;
 }
 
 //----------------------------------------------------------------------------

@@ -97,6 +97,8 @@ private:
 
   std::string FindIarBuildCommand();
 
+  std::string GenerateBuildScript(const std::string &projectName, const std::string &workDir);
+
   void RegisterProject(const std::string& projectName);
 
   void GetCmdLines(std::vector<cmCustomCommand> const& rTmpCmdVec,
