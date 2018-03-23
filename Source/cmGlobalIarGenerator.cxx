@@ -586,7 +586,7 @@ void cmGlobalIarGenerator::GenerateBuildCommand(
   std::vector<std::string>& makeCommand, const std::string& makeProgram,
   const std::string& projectName, const std::string& projectDir,
   const std::string& targetName, const std::string& /*config*/, bool /*fast*/,
-  bool /*verbose*/, std::vector<std::string> const& makeOptions)
+  bool verbose, std::vector<std::string> const& makeOptions)
 {
     if (targetName == "clean" || targetName == "preinstall")
     {
@@ -599,13 +599,17 @@ void cmGlobalIarGenerator::GenerateBuildCommand(
   makeCommand.push_back(
     this->SelectMakeProgram(makeProgram, this->FindIarBuildCommand()));
 
-  makeCommand.insert(makeCommand.end(), makeOptions.begin(),
-                     makeOptions.end());
   if (!targetName.empty()) {
-      makeCommand.push_back(projName);
+    std::string CommandArguments = projName + " -build " + cmGlobalIarGenerator::GLOBALCFG.buildType;
+    if (verbose)
+    {
+      CommandArguments += " -log all";
+    }
+      makeCommand.push_back(CommandArguments);
   }
 
-  /*printf("BuildCmd: %s %s (%s %s)\n", this->FindIarBuildCommand().c_str(), targetName.c_str(), projectDir.c_str(), projectName.c_str());*/
+   makeCommand.insert(makeCommand.end(), makeOptions.begin(),
+     makeOptions.end());
 }
 
 
@@ -1563,7 +1567,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   ilinkData->NewOption("IlinkLogModule")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogSection")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogVeneer")->NewState(this->buildCfg.isDebug ? "1" : "0");
-  ilinkData->NewOption("IlinkIcfOverride")->NewState("1");
+  ilinkData->NewOption("IlinkIcfOverride")->NewState("0");
   ilinkData->NewOption("IlinkIcfFile")->NewState(this->buildCfg.icfPath);
   ilinkData->NewOption("IlinkIcfFileSlave")->NewState("");
   ilinkData->NewOption("IlinkEnableRemarks")->NewState("0");
@@ -2200,8 +2204,6 @@ void cmGlobalIarGenerator::Workspace::CreateWorkspaceFile()
   }
 
   std::replace( iarBuildCmd.begin(), iarBuildCmd.end(), '/', '\\');
-
-  /*printf("Build cmd: %s.\n", iarBuildCmd.c_str());*/
 
   FILE* pFile = fopen(wsFileName.c_str(), "w");
   FILE* pBatFile = fopen(batFileName.c_str(), "w");
