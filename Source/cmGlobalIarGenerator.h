@@ -343,6 +343,7 @@ private:
     std::string dbgProbeSelection   ;
     std::string dbgIjetProbeconfig  ;
     std::string dbgLogFile          ;
+    std::string dbgStLinkInterface  ;
     std::string linkerEntryRoutine  ;
     std::string linkerIcfFile       ;
     std::string linkerUseFlashLoader;

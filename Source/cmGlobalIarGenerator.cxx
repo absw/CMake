@@ -673,6 +673,8 @@ void cmGlobalIarGenerator::Generate()
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_PROBE");
   GLOBALCFG.dbgLogFile =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_LOGFILE");
+  GLOBALCFG.dbgStLinkInterface =
+    globalMakefile->GetSafeDefinition("IAR_DEBUGGER_STLINK_INTERFACE");
   GLOBALCFG.linkerEntryRoutine =
       globalMakefile->GetSafeDefinition("IAR_LINKER_ENTRY_ROUTINE");
   GLOBALCFG.linkerIcfFile =
@@ -1740,9 +1742,9 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
     cspyData->NewOption("RunToEnable")->NewState(isDebug ? "1" : "0");
     cspyData->NewOption("RunToName")->NewState("main");
 
-    cspyData->NewOption("CExtraOptionsCheck")->NewState(isDebug ? "1" : "0");
+    cspyData->NewOption("CExtraOptionsCheck")->NewState(!GLOBALCFG.dbgExtraOptions.empty() ? "1" : "0");
     cspyData->NewOption("CExtraOptions")
-            ->NewState(isDebug ? "--jet_use_hw_breakpoint_for_semihosting" : "");
+            ->NewState(isDebug ? GLOBALCFG.dbgExtraOptions : "");
     cspyData->NewOption("CFpuProcessor")->NewState("1");
     cspyData->NewOption("OCDDFArgumentProducer")->NewState("");
     cspyData->NewOption("OCDownloadSuppressDownload")->NewState("0");
@@ -1756,6 +1758,10 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
     else if (GLOBALCFG.dbgProbeSelection == "I-Jet")
     {
         cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
+    }
+    else if (GLOBALCFG.dbgProbeSelection == "ST-Link")
+    {
+      cspyData->NewOption("OCDynDriverList")->NewState("STLINK_ID");
     }
     else
     {
@@ -2078,7 +2084,7 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
     rdiData->NewOption("CRDIDriverDll")->NewState("###Uninitialized###");
     rdiData->NewOption("CRDILogFileCheck")->NewState("0");
     rdiData->NewOption("CRDILogFileEdit")
-            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(GLOBALCFG.dbgLogFile);
     rdiData->NewOption("CCRDIHWReset")->NewState("0");
     rdiData->NewOption("CCRDICatchReset")->NewState("0");
     rdiData->NewOption("CCRDICatchUndef")->NewState("0");
@@ -2097,7 +2103,7 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
 
 
     stlinkData->NewOption("OCDriverInfo")->NewState("1");
-    stlinkData->NewOption("CCSTLinkInterfaceRadio")->NewState("0");
+    stlinkData->NewOption("CCSTLinkInterfaceRadio")->NewState((GLOBALCFG.dbgStLinkInterface == "SWD") ? "1" : "0");
     stlinkData->NewOption("CCSTLinkInterfaceCmdLine")->NewState("0");
     stlinkData->NewOption("CCSTLinkResetList",1)->NewState("0");
     stlinkData->NewOption("CCCpuClockEdit")->NewState("72.0");
