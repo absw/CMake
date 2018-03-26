@@ -23,7 +23,6 @@
 #include "cmTarget.h"
 #include "cmGeneratorTarget.h"
 #include "cmSourceFile.h"
-#include "cmState.h"
 #include "cmSystemTools.h"
 #include <stdlib.h>
 #include <cstdlib>
@@ -39,11 +38,15 @@
 
 /// @brief XML Declaration.
 const char* cmGlobalIarGenerator::XML_DECL =
-    "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n";
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
 
 const char* cmGlobalIarGenerator::PROJ_FILE_EXT = ".ewp";
 const char* cmGlobalIarGenerator::WS_FILE_EXT = ".eww";
 const char* cmGlobalIarGenerator::DEFAULT_MAKE_PROGRAM = "IarBuild";
+
+/// @brief IAR project file format constants.
+const int IccArmVersion = 28;
+const int IccArchiveVersion = 2;
 
 
 /// @brief Global configuration of the project (it should be visible
@@ -90,11 +93,11 @@ class XmlNode
   /// @brief Children vector.
   std::vector<XmlNode*> children;
 
-  /// @brief Simple printing helper table for tabs up to 11 levels.
+  /// @brief Simple printing helper table for tabs up to 13 levels.
   static const char* LEVELS[];
 
 public:
-  XmlNode(std::string name, std::string value) :
+  XmlNode(const std::string &name, const std::string &value) :
   nodeName(name), plainValue(value)
 {
   // Just copy values.
@@ -106,7 +109,7 @@ public:
   }
 
   /// This function creates a new child node (dynamic memory allocation).
-  XmlNode* NewChild(std::string name, std::string value)
+  XmlNode* NewChild(const std::string &name, const std::string &value)
   {
     XmlNode* child = new XmlNode(name, value);
     children.push_back(child);
@@ -114,7 +117,7 @@ public:
   }
 
   /// This function creates a new child node (dynamic memory allocation).
-  XmlNode* NewChild(std::string name)
+  XmlNode* NewChild(const std::string &name)
   {
     XmlNode* child = new XmlNode(name);
     children.push_back(child);
@@ -130,7 +133,7 @@ public:
     return this;
   }
 
-  void AddAttr(std::string name, std::string value)
+  void AddAttr(const std::string &name, const std::string &value)
   {
     attrs.push_back(std::make_pair(name, value));
   }
@@ -179,181 +182,76 @@ public:
       }
 
     if (!moreThanOnce)
-      {
+    {
       if (this->plainValue.empty())
-        {
-        outStr[outStr.length()-1] = '/';
+      {
+        outStr[outStr.length() - 1] = '/';
         outStr += ">\n";
         // Do not append close tag.
-        }
+      }
       else
-        {
+      {
         outStr += this->plainValue;
         this->AppendCloseTag(outStr, level);
-        }
       }
+    }
     else
-      {
+    {
       outStr += LEVELS[level];
       this->AppendCloseTag(outStr, level);
-      }
+    }
   }
 
   virtual ~XmlNode()
   {
-    for(std::vector<XmlNode*>::iterator it = this->children.begin();
-        it != this->children.end();
-        ++it)
-      {
+    for (std::vector<XmlNode*>::iterator it = this->children.begin();
+      it != this->children.end();
+      ++it)
+    {
       delete *it;
-      }
+    }
   }
 };
 
 const char* XmlNode::LEVELS[] =
-    {
-        "",
-        "\t",
-        "\t\t",
-        "\t\t\t",
-        "\t\t\t\t",
-        "\t\t\t\t\t",
-        "\t\t\t\t\t\t",
-        "\t\t\t\t\t\t\t",
-        "\t\t\t\t\t\t\t\t",
-        "\t\t\t\t\t\t\t\t\t",
-        "\t\t\t\t\t\t\t\t\t\t"
-    };
+{
+    "",
+    "\t",
+    "\t\t",
+    "\t\t\t",
+    "\t\t\t\t",
+    "\t\t\t\t\t",
+    "\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t\t\t\t\t",
+};
 
 const char* RUNTIME_LIBRARY_CONFIG[] =
-    {
-        "None"  , // 0
-        "Normal", // 1
-        "Full"  , // 2
-        "Custom"  // 3
-    };
-
+{
+    "None"  , // 0
+    "Normal", // 1
+    "Full"  , // 2
+    "Custom"  // 3
+};
 
 const char* SCANF_PRINTF_FORMATTING[] =
-    {
-        "Auto"  , // 0
-        "Full", // 1
-        "Full without multibytes"  , // 2
-        "Large", // 3
-        "Large without multibytes"  , // 4
-        "Small", // 5
-        "Small without multibytes"  , // 6
-        "Tiny"  // 7
-    };
+{
+    "Auto"  , // 0
+    "Full", // 1
+    "Full without multibytes"  , // 2
+    "Large", // 3
+    "Large without multibytes"  , // 4
+    "Small", // 5
+    "Small without multibytes"  , // 6
+    "Tiny"  // 7
+};
 
 const int SCANF_FORMATTING_CNT = 7;
 const int PRINTF_FORMATTING_CNT = 8;
-
-
-class FileTreeNode
-{
-public:
-  std::string ftNodeName;
-
-  std::vector<FileTreeNode*> children;
-
-  FileTreeNode(std::string name) : ftNodeName(name)
-  {
-
-  }
-
-  void TransformToIarTree(XmlNode* root)
-  {
-    if (!this->children.empty())
-      {
-      XmlNode* group = root->NewChild("group");
-      group->NewChild("name", this->ftNodeName);
-
-      for (std::vector<FileTreeNode*>::const_iterator it =
-          this->children.begin();
-          it != this->children.end();
-          ++it)
-        {
-        (*it)->TransformToIarTree(group);
-        }
-
-      }
-    else
-      {
-      XmlNode* file = root->NewChild("file");
-      file->NewChild("name", this->ftNodeName);
-      }
-  }
-
-  FileTreeNode* NewNode(std::string name)
-  {
-    FileTreeNode* node = new FileTreeNode(name);
-    children.push_back(node);
-    return node;
-  }
-
-  static void AddToTree(FileTreeNode* root, std::string path,
-      const std::string& fullpath)
-  {
-    size_t slashPos = path.find_first_of("/\\");
-    std::string currentChunk;
-    std::string restOfPath;
-    if (slashPos != std::string::npos)
-      {
-      currentChunk = path.substr(0, slashPos);
-      restOfPath = path.substr(slashPos+1);
-      }
-    else
-      {
-      currentChunk = path;
-      restOfPath = "";
-      }
-
-    if (!currentChunk.empty())
-      {
-      bool found = false;
-      for (std::vector<FileTreeNode*>::const_iterator it =
-          root->children.begin();
-          it != root->children.end();
-          ++it)
-        {
-        if ((*it)->ftNodeName == currentChunk)
-          {
-          // Found, move in tree.
-          AddToTree(*it, restOfPath, fullpath);
-          found = true;
-          break;
-          }
-        }
-
-      if (!found)
-        {
-        if (restOfPath.empty())
-          {
-          // Not found, create new and finish.
-          root->NewNode(fullpath);
-          return;
-          }
-        else
-          {
-          // Not found, create new and move inside.
-          FileTreeNode* newNode = root->NewNode(currentChunk);
-          AddToTree(newNode, restOfPath, fullpath);
-          }
-        }
-      }
-  }
-
-  virtual ~FileTreeNode()
-  {
-    for(std::vector<FileTreeNode*>::iterator it = children.begin();
-        it != children.end();
-        ++it)
-      {
-      delete *it;
-      }
-  }
-};
 
 class IarOption : public XmlNode
 {
@@ -413,7 +311,6 @@ public:
 }
 };
 
-
 class IarData : public XmlNode
 {
 private:
@@ -422,31 +319,30 @@ private:
   bool dataDebug;
 public:
   IarData(int version, bool wantNonLocal, bool debug) :
-  XmlNode("data"),
-  dataVersion(version),
-  dataWantNonLocal(wantNonLocal),
-  dataDebug(debug)
-{
-  this->NewChild("version", int2str(dataVersion));
-  this->NewChild("wantNonLocal", dataWantNonLocal ? "1" : "0");
-  this->NewChild("debug", dataDebug ? "1" : "0");
-}
+    XmlNode("data"),
+    dataVersion(version),
+    dataWantNonLocal(wantNonLocal),
+    dataDebug(debug)
+  {
+    this->NewChild("version", int2str(dataVersion));
+    this->NewChild("wantNonLocal", dataWantNonLocal ? "1" : "0");
+    this->NewChild("debug", dataDebug ? "1" : "0");
+  }
 
-  IarOption* NewOption(std::string name, int version)
+  IarOption* NewOption(const std::string &name, int version)
   {
     IarOption* option = new IarOption(name, version);
     this->AddChild(option);
     return option;
   }
 
-  IarOption* NewOption(std::string name)
+  IarOption* NewOption(const std::string &name)
   {
     IarOption* option = new IarOption(name);
     this->AddChild(option);
     return option;
   }
 };
-
 
 class IarSettings : public XmlNode
 {
@@ -477,39 +373,138 @@ public:
   }
 };
 
-
-class IarFsNode : public XmlNode
+class FileTreeNode
 {
-private:
-  std::string fsPath;
-  bool fsIsDir;
+public:
+  std::string ftNodeName;
 
-  std::string GetLastDir(std::string path)
+  std::vector<FileTreeNode*> children;
+
+  FileTreeNode(const std::string &name) :
+    ftNodeName(name)
   {
-    size_t position = path.find_last_of("/\\");
-    if (position != std::string::npos)
-      {
-      return path.substr(position+1);
-      }
-    return std::string("");
   }
 
-public:
-  IarFsNode(std::string path,
-      bool isDir) :
-      XmlNode(isDir ? "group" : "file"),
-      fsPath(path),
-      fsIsDir(isDir)
-{
-  this->NewChild("name", isDir ? GetLastDir(fsPath) : fsPath);
-
-}
-
-  IarData* NewData(int version, bool wantNonLocal, bool debug)
+  void TransformToIarTree(XmlNode* root,
+                          const std::string &configName,
+                          bool isDebug,
+                          const std::string &cxxExtraOptionsOverride)
   {
-    IarData* data = new IarData(version, wantNonLocal, debug);
-    this->AddChild(data);
-    return data;
+    if (!this->children.empty())
+    {
+      XmlNode* group = root->NewChild("group");
+      group->NewChild("name", this->ftNodeName);
+
+      for (std::vector<FileTreeNode*>::const_iterator it =
+        this->children.begin();
+        it != this->children.end();
+        ++it)
+      {
+        (*it)->TransformToIarTree(group, configName, isDebug, cxxExtraOptionsOverride);
+      }
+    }
+    else
+    {
+      XmlNode* file = root->NewChild("file");
+      file->NewChild("name", this->ftNodeName);
+      const std::string FileExtension = GetFileExtension(this->ftNodeName);
+      if ((cmSystemTools::GetFileFormat(FileExtension.c_str()) == cmSystemTools::CXX_FILE_FORMAT) &&
+        !cxxExtraOptionsOverride.empty())
+      {
+        XmlNode* config = file->NewChild("configuration");
+        config->NewChild("name", configName);
+
+        IarSettings* iccArmSettings = new IarSettings("ICCARM", IccArchiveVersion);
+        config->AddChild(iccArmSettings);
+        const bool WantNonLocal = false;
+        IarData* iccArmData = iccArmSettings->NewData(IccArmVersion, WantNonLocal, isDebug);
+
+        iccArmData->NewOption("IExtraOptionsCheck")->NewState("1");
+        iccArmData->NewOption("IExtraOptions")->NewState(cxxExtraOptionsOverride);
+      }
+    }
+  }
+
+  FileTreeNode* NewNode(std::string name)
+  {
+    FileTreeNode* node = new FileTreeNode(name);
+    children.push_back(node);
+    return node;
+  }
+
+  static void AddToTree(FileTreeNode* root, std::string path,
+    const std::string& fullpath)
+  {
+    size_t slashPos = path.find_first_of("/\\");
+    std::string currentChunk;
+    std::string restOfPath;
+    if (slashPos != std::string::npos)
+    {
+      currentChunk = path.substr(0, slashPos);
+      restOfPath = path.substr(slashPos + 1);
+    }
+    else
+    {
+      currentChunk = path;
+      restOfPath = "";
+    }
+
+    if (!currentChunk.empty())
+    {
+      bool found = false;
+      for (std::vector<FileTreeNode*>::const_iterator it =
+        root->children.begin();
+        it != root->children.end();
+        ++it)
+      {
+        if ((*it)->ftNodeName == currentChunk)
+        {
+          // Found, move in tree.
+          AddToTree(*it, restOfPath, fullpath);
+          found = true;
+          break;
+        }
+      }
+
+      if (!found)
+      {
+        if (restOfPath.empty())
+        {
+          // Not found, create new and finish.
+          root->NewNode(fullpath);
+          return;
+        }
+        else
+        {
+          // Not found, create new and move inside.
+          FileTreeNode* newNode = root->NewNode(currentChunk);
+          AddToTree(newNode, restOfPath, fullpath);
+        }
+      }
+    }
+  }
+
+  static std::string GetFileExtension(const std::string &filename)
+  {
+    auto dotPosition = filename.rfind('.');
+    if (dotPosition != std::string::npos) {
+      auto extension = filename.substr(dotPosition + 1);
+#if defined(_WIN32) || defined(__APPLE__)
+      extension = cmSystemTools::LowerCase(extension);
+#endif
+      return extension;
+    }
+    return "";
+  }
+
+  virtual ~FileTreeNode()
+  {
+    for (std::vector<FileTreeNode*>::iterator it = children.begin();
+      it != children.end();
+      ++it)
+    {
+      delete *it;
+    }
   }
 };
 
@@ -587,26 +582,18 @@ void cmGlobalIarGenerator::GenerateBuildCommand(
   std::vector<std::string>& makeCommand, const std::string& makeProgram,
   const std::string& projectName, const std::string& projectDir,
   const std::string& targetName, const std::string& /*config*/, bool /*fast*/,
-  bool /*verbose*/, std::vector<std::string> const& makeOptions)
+  bool /*verbose*/, std::vector<std::string> const& /*makeOptions*/)
 {
-    if (targetName == "clean" || targetName == "preinstall")
-    {
-        makeCommand.push_back("echo");
-        makeCommand.push_back("Skipping target " + targetName);
-        return;
-    }
-  std::string projName = projectDir + "/" + targetName + ".ewp";
-
-  makeCommand.push_back(
-    this->SelectMakeProgram(makeProgram, this->FindIarBuildCommand()));
-
-  makeCommand.insert(makeCommand.end(), makeOptions.begin(),
-                     makeOptions.end());
-  if (!targetName.empty()) {
-      makeCommand.push_back(projName);
+  if (targetName == "clean" || targetName == "preinstall")
+  {
+    makeCommand.push_back("echo");
+    makeCommand.push_back("Skipping target " + targetName);
+    return;
   }
+  std::string projName = targetName + ".ewp";
+  std::string &scriptName = GenerateBuildScript(projName, projectDir);
 
-  /*printf("BuildCmd: %s %s (%s %s)\n", this->FindIarBuildCommand().c_str(), targetName.c_str(), projectDir.c_str(), projectName.c_str());*/
+  makeCommand.push_back(scriptName);
 }
 
 
@@ -618,6 +605,10 @@ void cmGlobalIarGenerator::Generate()
   const cmMakefile* globalMakefile = lgs0->GetMakefile();
 
   GLOBALCFG.buildType = globalMakefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
+  if (GLOBALCFG.buildType.empty())
+  {
+      GLOBALCFG.buildType = "Debug";
+  }
   std::string flagsWithType = std::string("CMAKE_C_FLAGS_") + cmSystemTools::UpperCase(GLOBALCFG.buildType);
 
   GLOBALCFG.iarCCompilerFlags = globalMakefile->GetSafeDefinition("CMAKE_C_FLAGS");
@@ -678,30 +669,34 @@ void cmGlobalIarGenerator::Generate()
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_CSPY_MEMFILE");
   GLOBALCFG.dbgIjetProbeconfig =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_IJET_PROBECONFIG");
+  GLOBALCFG.dbgProbeSelection =
+      globalMakefile->GetSafeDefinition("IAR_DEBUGGER_PROBE");
   GLOBALCFG.dbgLogFile =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_LOGFILE");
+  GLOBALCFG.dbgStLinkInterface =
+    globalMakefile->GetSafeDefinition("IAR_DEBUGGER_STLINK_INTERFACE");
   GLOBALCFG.linkerEntryRoutine =
       globalMakefile->GetSafeDefinition("IAR_LINKER_ENTRY_ROUTINE");
   GLOBALCFG.linkerIcfFile =
       globalMakefile->GetSafeDefinition("IAR_LINKER_ICF_FILE");
-  GLOBALCFG.linkerIcfOverride =
-      globalMakefile->GetSafeDefinition("IAR_LINKER_ICF_OVERRIDE");
   GLOBALCFG.tgtArch =
       globalMakefile->GetSafeDefinition("IAR_TARGET_ARCHITECTURE");
   GLOBALCFG.genLowLevelInterface =
-      globalMakefile->GetSafeDefinition("IAR_GEN_LOW_LEVEL_INTERFACE");
+    globalMakefile->GetSafeDefinition("IAR_GEN_LOW_LEVEL_INTERFACE");
   GLOBALCFG.CCEnableRemarks =
-      globalMakefile->GetSafeDefinition("IAR_CC_ENABLE_REMARKS");
+    globalMakefile->GetSafeDefinition("IAR_CC_ENABLE_REMARKS");
   GLOBALCFG.CCOptLevel =
-      globalMakefile->GetSafeDefinition("IAR_CC_OPT_LEVEL");
+    globalMakefile->GetSafeDefinition("IAR_CC_OPT_LEVEL");
   GLOBALCFG.CCOptLevelSlave =
-      globalMakefile->GetSafeDefinition("IAR_CC_OPT_LEVEL_SLAVE");
+    globalMakefile->GetSafeDefinition("IAR_CC_OPT_LEVEL_SLAVE");
   GLOBALCFG.linkerUseFlashLoader =
-      globalMakefile->GetSafeDefinition("IAR_USE_FLASH_LOADER");
+    globalMakefile->GetSafeDefinition("IAR_USE_FLASH_LOADER");
   GLOBALCFG.CCDiagSuppress =
-      globalMakefile->GetSafeDefinition("IAR_CC_DIAG_SUPPRESS");
+    globalMakefile->GetSafeDefinition("IAR_CC_DIAG_SUPPRESS");
   GLOBALCFG.CCDiagWarnAreErr =
-      globalMakefile->GetSafeDefinition("IAR_CC_DIAG_WARN_ARE_ERR");
+    globalMakefile->GetSafeDefinition("IAR_CC_DIAG_WARN_ARE_ERR");
+  GLOBALCFG.cxxExtraOptionsOverride =
+    globalMakefile->GetSafeDefinition("IAR_CXX_EXTRA_OPTIONS");
 
   GLOBALCFG.rtos = globalMakefile->GetSafeDefinition("IAR_TARGET_RTOS");
 
@@ -1146,35 +1141,45 @@ void cmGlobalIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
       sourceFilesVector.begin();
       it != sourceFilesVector.end();
       ++it)
-    {
+  {
     project->sources.push_back((*it)->GetFullPath());
-    }
+  }
 
   // Compose build configuration
-
   std::vector<cmTarget*> owned = makeFile->GetOwnedImportedTargets();
 
   cmGlobalIarGenerator::BuildConfig buildCfg;
   buildCfg.name = GLOBALCFG.buildType;
-  buildCfg.isDebug = (GLOBALCFG.buildType != "Release");
-  buildCfg.exeDir = buildCfg.name;
-  buildCfg.exeDir += "/Exe";
-  buildCfg.objectDir = buildCfg.name;
-  buildCfg.objectDir += "/Obj";
-  buildCfg.listDir = buildCfg.name;
-  buildCfg.listDir += "/Lst";
+  buildCfg.isDebug = (GLOBALCFG.buildType == "Debug");
+  buildCfg.exeDir = buildCfg.name + "/Exe";
+  buildCfg.objectDir = buildCfg.name + "/Obj";
+  buildCfg.listDir = buildCfg.name + "/Lst";
   buildCfg.toolchain = GLOBALCFG.tgtArch;
   buildCfg.outputFile = genTgt->GetExportName();
 
   buildCfg.preBuildCmd = "";
   buildCfg.postBuildCmd = "";
 
+  buildCfg.icfPath = GLOBALCFG.linkerIcfFile;
+
+  // Get target-specific properties
+  const auto &targetProperties = tgt.GetProperties();
+
+  const auto LinkerIcfFile = targetProperties.GetPropertyValue("IAR_LINKER_ICF_FILE");
+  if (LinkerIcfFile != nullptr)
+  {
+    buildCfg.icfPath = LinkerIcfFile;
+  }
+  const auto CxxExtraOptionsOverride = targetProperties.GetPropertyValue("IAR_CXX_EXTRA_OPTIONS");
+  if (CxxExtraOptionsOverride != nullptr)
+  {
+    buildCfg.cxxExtraOptionsOverride = CxxExtraOptionsOverride;
+  }
+
+  // Prebuild & postbuild.    
   std::string prebuild = project->binaryDir + "/" + buildCfg.exeDir+"/"+project->name+"_prebuild.bat";
   std::string postbuild = project->binaryDir + "/" + buildCfg.exeDir+"/"+project->name+"_postbuild.bat";
 
-  buildCfg.icfPath = GLOBALCFG.linkerIcfFile;
-
-  // Prebuild & postbuild.
   std::string buildCmd = "";
   buildCmd.reserve(2048);
 
@@ -1322,15 +1327,20 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   IarSettings* generalSettings = new IarSettings("General", 3);
   config->AddChild(generalSettings);
 
-  IarData* generalData = generalSettings->NewData(24, true, this->buildCfg.isDebug);
-  generalData->NewOption("ExePath")->NewState(this->buildCfg.exeDir);
-  generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir);
-  generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir);
+  IarData* generalData = generalSettings->NewData(29, true, this->buildCfg.isDebug);
+  generalData->NewOption("ExePath")->NewState(this->buildCfg.exeDir + "/" + this->name);
+  generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir + "/" + this->name);
+  generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir + "/" + this->name);
   generalData->NewOption("GEndianMode")->NewState("0");
-  generalData->NewOption("Input variant", 3)->NewState("0");
+
+
+  std::string pPrintfIdStr = int2str(GLOBALCFG.printfFmtId);
+  std::string pScanfIdStr = int2str(GLOBALCFG.scanfFmtId);
+
+  generalData->NewOption("OGPrintfVariant", 0)->NewState(pPrintfIdStr);
   generalData->NewOption("Input description")
               ->NewState("Automatic choice of formatter.");
-  generalData->NewOption("Output variant", 2)->NewState("0");
+  generalData->NewOption("OGScanfVariant", 0)->NewState(pScanfIdStr);
   generalData->NewOption("Output description")
                 ->NewState("Automatic choice of formatter.");
   generalData->NewOption("GOutputBinary")
@@ -1362,7 +1372,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   const char* pGenLowLevelIfaceStr = GLOBALCFG.semihostingEnabled == "ON" ? "1" : "0";
 
   generalData->NewOption("GenLowLevelInterface")
-	  ->NewState(cmSystemTools::IsOn(GLOBALCFG.genLowLevelInterface.c_str()) ? "1" : "0");
+                ->NewState(pGenLowLevelIfaceStr);
   generalData->NewOption("GEndianModeBE")->NewState("1");
 
   const char* pBufferedStr = GLOBALCFG.bufferedTermOut == "ON" ? "1" : "0";
@@ -1379,18 +1389,18 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
                     "00101111011110101011111111111111111111111111011111110"
                     "11111001111011111011111111111111111");
   generalData->NewOption("RTConfigPath2")
-              ->NewState(std::string("$TOOLKIT_DIR$\\INC\\c\\DLib_Config_") + cmExtraIarGenerator::GLOBALCFG.compilerDlibConfig + ".h");
+              ->NewState(std::string("$TOOLKIT_DIR$\\INC\\c\\DLib_Config_") + cmGlobalIarGenerator::GLOBALCFG.compilerDlibConfig + ".h");
   generalData->NewOption("GFPUCoreSlave2", 20)->NewState("42");
   generalData->NewOption("GBECoreSlave", 20)->NewState("42");
   generalData->NewOption("OGUseCmsis")->NewState("0");
   generalData->NewOption("OGUseCmsisDspLib")->NewState("0");
 
   // ARM Compiler (ICCARM):
-  IarSettings* iccArmSettings = new IarSettings("ICCARM", 2);
+  IarSettings* iccArmSettings = new IarSettings("ICCARM", IccArchiveVersion);
   config->AddChild(iccArmSettings);
 
 
-  IarData* iccArmData = iccArmSettings->NewData(28, true, this->buildCfg.isDebug);
+  IarData* iccArmData = iccArmSettings->NewData(IccArmVersion, true, this->buildCfg.isDebug);
 
   iccArmData->NewOption("CCOptimizationNoSizeConstraints")->NewState("0");
   iccArmData->NewOption("CCDefines")->NewStates(this->buildCfg.compileDefs);
@@ -1402,10 +1412,8 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCListCMessages")->NewState("0");
   iccArmData->NewOption("CCListAssFile")->NewState("0");
   iccArmData->NewOption("CCListAssSource")->NewState("0");
-  iccArmData->NewOption("CCEnableRemarks")
-                ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.CCEnableRemarks.c_str()) ? "1" : "0");
-  iccArmData->NewOption("CCDiagSuppress")
-                ->NewState(GLOBALCFG.CCDiagSuppress.c_str());
+  iccArmData->NewOption("CCEnableRemarks")->NewState(cmSystemTools::IsOn(GLOBALCFG.CCEnableRemarks.c_str()) ? "1" : "0");
+  iccArmData->NewOption("CCDiagSuppress")->NewState(GLOBALCFG.CCDiagSuppress);
   iccArmData->NewOption("CCDiagRemark")->NewState("");
   iccArmData->NewOption("CCDiagWarning")->NewState("");
   iccArmData->NewOption("CCDiagError")->NewState("");
@@ -1415,14 +1423,12 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCDebugInfo")->NewState(this->buildCfg.isDebug ? "1" : "0");
   iccArmData->NewOption("IEndianMode")->NewState("1");
   iccArmData->NewOption("IProcessor")->NewState("1");
-  iccArmData->NewOption("IExtraOptionsCheck")->NewState("1");
+  iccArmData->NewOption("IExtraOptionsCheck")->NewState(this->buildCfg.compilerOpts.empty() ? "0" : "1");
   iccArmData->NewOption("IExtraOptions")->NewStates(this->buildCfg.compilerOpts);
   iccArmData->NewOption("CCLangConformance")->NewState("0");
   iccArmData->NewOption("CCSignedPlainChar")->NewState("1");
   iccArmData->NewOption("CCRequirePrototypes")->NewState("0");
-  iccArmData->NewOption("CCMultibyteSupport")->NewState("0");
-  iccArmData->NewOption("CCDiagWarnAreErr")
-      ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.CCDiagWarnAreErr.c_str()) ? "1" : "0");
+  iccArmData->NewOption("CCDiagWarnAreErr")->NewState(cmSystemTools::IsOn(GLOBALCFG.CCDiagWarnAreErr.c_str()) ? "1" : "0");
   iccArmData->NewOption("CCCompilerRuntimeInfo")->NewState("0");
   iccArmData->NewOption("IFpuProcessor")->NewState("1");
   iccArmData->NewOption("OutputFile")->NewState("$FILE_BNAME$.o");
@@ -1435,10 +1441,10 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCCodeSection")->NewState(".text");
   iccArmData->NewOption("IInterwork2")->NewState("0");
   iccArmData->NewOption("IProcessorMode2")->NewState("1");
-  iccArmData->NewOption("CCOptLevel")->NewState(cmExtraIarGenerator::GLOBALCFG.CCOptLevel);
+  iccArmData->NewOption("CCOptLevel")->NewState(GLOBALCFG.CCOptLevel.empty() ? "1" : GLOBALCFG.CCOptLevel);
   iccArmData->NewOption("CCOptStrategy", 0)->NewState("1");
   iccArmData->NewOption("CCOptLevelSlave")
-                ->NewState(cmExtraIarGenerator::GLOBALCFG.CCOptLevelSlave);
+                ->NewState(GLOBALCFG.CCOptLevel.empty() ? "1" : GLOBALCFG.CCOptLevel);
   iccArmData->NewOption("CompilerMisraRules98", 0)
                 ->NewState("100011111011010110111001110011111110111001101100010111"
                     "011110110110011111111111110011001111100111011100111111"
@@ -1498,7 +1504,6 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   aArmData->NewOption("AProcessor")->NewState("1");
   aArmData->NewOption("AFpuProcessor")->NewState("1");
   aArmData->NewOption("AOutputFile")->NewState("$FILE_BNAME$.o");
-  aArmData->NewOption("AMultibyteSupport")->NewState("0");
   aArmData->NewOption("ALimitErrorsCheck")->NewState("0");
   aArmData->NewOption("ALimitErrorsEdit")->NewState("100");
   aArmData->NewOption("AIgnoreStdInclude")->NewState("0");
@@ -1550,7 +1555,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   IarData* ilinkData = ilinkSettings->NewData(15, true, this->buildCfg.isDebug);
 
   outFile = this->buildCfg.outputFile;
-  outFile += ".out";
+  outFile += ".elf";
   ilinkData->NewOption("IlinkOutputFile")->NewState(outFile);
   ilinkData->NewOption("IlinkLibIOConfig")->NewState("1");
   ilinkData->NewOption("XLinkMisraHandler")->NewState("0");
@@ -1570,11 +1575,10 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   ilinkData->NewOption("IlinkLogModule")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogSection")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogVeneer")->NewState(this->buildCfg.isDebug ? "1" : "0");
-  ilinkData->NewOption("IlinkIcfOverride")
-                ->NewState(cmExtraIarGenerator::GLOBALCFG.linkerIcfOverride);
+  ilinkData->NewOption("IlinkIcfOverride")->NewState((buildCfg.icfPath.empty()) ? "0" : "1");
   ilinkData->NewOption("IlinkIcfFile")->NewState(this->buildCfg.icfPath);
   ilinkData->NewOption("IlinkIcfFileSlave")->NewState("");
-  ilinkData->NewOption("IlinkEnableRemarks")->NewState("0");
+  ilinkData->NewOption("IlinkEnableRemarks")->NewState("1");
   ilinkData->NewOption("IlinkSuppressDiags")->NewState("");
   ilinkData->NewOption("IlinkTreatAsRem")->NewState("");
   ilinkData->NewOption("IlinkTreatAsWarn")->NewState("");
@@ -1669,7 +1673,10 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
 
     }
 
-  ftRoot.TransformToIarTree(&root);
+  ftRoot.TransformToIarTree(&root, 
+                            this->buildCfg.name, 
+                            this->buildCfg.isDebug, 
+                            this->buildCfg.cxxExtraOptionsOverride);
   root.AddChild(groupExternal);
 
 
@@ -1735,21 +1742,40 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
     cspyData->NewOption("RunToEnable")->NewState(isDebug ? "1" : "0");
     cspyData->NewOption("RunToName")->NewState("main");
 
-    cspyData->NewOption("CExtraOptionsCheck")->NewState(isDebug ? "1" : "0");
+    cspyData->NewOption("CExtraOptionsCheck")->NewState(!GLOBALCFG.dbgExtraOptions.empty() ? "1" : "0");
     cspyData->NewOption("CExtraOptions")
-            ->NewState(isDebug ? "--jet_use_hw_breakpoint_for_semihosting" : "");
+            ->NewState(isDebug ? GLOBALCFG.dbgExtraOptions : "");
     cspyData->NewOption("CFpuProcessor")->NewState("1");
     cspyData->NewOption("OCDDFArgumentProducer")->NewState("");
     cspyData->NewOption("OCDownloadSuppressDownload")->NewState("0");
     cspyData->NewOption("OCDownloadVerifyAll")->NewState("1");
     cspyData->NewOption("OCProductVersion")->NewState(GLOBALCFG.wbVersion);
 
+    if (GLOBALCFG.dbgProbeSelection == "J-Link")
+    {
+        cspyData->NewOption("OCDynDriverList")->NewState("JLINK_ID");
+    }
+    else if (GLOBALCFG.dbgProbeSelection == "I-Jet")
+    {
+        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
+    }
+    else if (GLOBALCFG.dbgProbeSelection == "ST-Link")
+    {
+      cspyData->NewOption("OCDynDriverList")->NewState("STLINK_ID");
+    }
+    else
+    {
+        // I-Jet is the default probe.
+        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
+    }
+
     cspyData->NewOption("OCLastSavedByProductVersion")
             ->NewState(GLOBALCFG.wbVersion);
     cspyData->NewOption("OCDownloadAttachToProgram")->NewState("0");
 
     cspyData->NewOption("UseFlashLoader")
-            ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.linkerUseFlashLoader.c_str()) ? "1" : "0");
+      ->NewState(cmSystemTools::IsOn(GLOBALCFG.linkerUseFlashLoader.c_str()) ? 
+        "1" : "0");
     cspyData->NewOption("CLowLevel")->NewState("1");
     cspyData->NewOption("OCBE8Slave")->NewState("1");
     cspyData->NewOption("MacFile2")->NewState("");
@@ -2058,7 +2084,7 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
     rdiData->NewOption("CRDIDriverDll")->NewState("###Uninitialized###");
     rdiData->NewOption("CRDILogFileCheck")->NewState("0");
     rdiData->NewOption("CRDILogFileEdit")
-            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgLogFile);
+            ->NewState(GLOBALCFG.dbgLogFile);
     rdiData->NewOption("CCRDIHWReset")->NewState("0");
     rdiData->NewOption("CCRDICatchReset")->NewState("0");
     rdiData->NewOption("CCRDICatchUndef")->NewState("0");
@@ -2077,7 +2103,7 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
 
 
     stlinkData->NewOption("OCDriverInfo")->NewState("1");
-    stlinkData->NewOption("CCSTLinkInterfaceRadio")->NewState("0");
+    stlinkData->NewOption("CCSTLinkInterfaceRadio")->NewState((GLOBALCFG.dbgStLinkInterface == "SWD") ? "1" : "0");
     stlinkData->NewOption("CCSTLinkInterfaceCmdLine")->NewState("0");
     stlinkData->NewOption("CCSTLinkResetList",1)->NewState("0");
     stlinkData->NewOption("CCCpuClockEdit")->NewState("72.0");
@@ -2176,6 +2202,49 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
 
 }
 
+
+std::string cmGlobalIarGenerator::GenerateBuildScript(const std::string &projectName, const std::string &workDir)
+{
+  std::string batFileName = workDir + "/BUILD_" + cmSystemTools::UpperCase(projectName) + ".bat";
+
+  std::string iarBuildCmd = cmGlobalIarGenerator::GLOBALCFG.iarArmPath;
+  std::size_t lastSlash = iarBuildCmd.find_last_of("/\\");
+  if (lastSlash != std::string::npos)
+  {
+    iarBuildCmd = iarBuildCmd.substr(0, lastSlash) + "/common/bin/IarBuild.exe";
+  }
+  else
+  {
+    iarBuildCmd = "IarBuild.exe";
+  }
+
+  std::replace(iarBuildCmd.begin(), iarBuildCmd.end(), '/', '\\');
+
+  FILE* pBatFile = fopen(batFileName.c_str(), "w");
+
+  std::string batchOutput = "";
+  batchOutput.reserve(1 << 20); // 1K.
+  batchOutput += "REM ===================================================\n";
+  batchOutput += "REM IAR BUILD (generated from CMake extraIarGenerator).\n";
+  batchOutput += "REM ===================================================\n\n";
+
+    std::string projPathWin = workDir + projectName;
+    std::replace(projPathWin.begin(), projPathWin.end(), '/', '\\');
+    batchOutput += "\"" + iarBuildCmd + "\" \""
+      + projPathWin + "\" -build "
+      + cmGlobalIarGenerator::GLOBALCFG.buildType + " -log all\n";
+
+  batchOutput += "\n\nREM ===================================================\n";
+  batchOutput += "REM END IAR BUILD.\n";
+  batchOutput += "REM ===================================================\n\n";
+
+  fwrite(batchOutput.c_str(), batchOutput.length(), 1, pBatFile);
+
+  fclose(pBatFile);
+
+  return batFileName;
+}
+
 //----------------------------------------------------------------------------
 void cmGlobalIarGenerator::Workspace::CreateWorkspaceFile()
 {
@@ -2195,8 +2264,6 @@ void cmGlobalIarGenerator::Workspace::CreateWorkspaceFile()
   }
 
   std::replace( iarBuildCmd.begin(), iarBuildCmd.end(), '/', '\\');
-
-  /*printf("Build cmd: %s.\n", iarBuildCmd.c_str());*/
 
   FILE* pFile = fopen(wsFileName.c_str(), "w");
   FILE* pBatFile = fopen(batFileName.c_str(), "w");

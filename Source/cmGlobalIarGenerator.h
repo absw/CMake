@@ -97,6 +97,8 @@ private:
 
   std::string FindIarBuildCommand();
 
+  std::string GenerateBuildScript(const std::string &projectName, const std::string &workDir);
+
   void RegisterProject(const std::string& projectName);
 
   void GetCmdLines(std::vector<cmCustomCommand> const& rTmpCmdVec,
@@ -261,6 +263,9 @@ private:
     /// Compiler options <state></state>
     std::vector<std::string> compilerOpts;
 
+    // C++ only options
+    std::string cxxExtraOptionsOverride;
+
     /// Linker keep symbols <state></state>
     std::vector<std::string> linkerKeepSymbols;
 
@@ -321,41 +326,43 @@ private:
 
   struct GlobalCmakeCfg
   {
-    std::string buildType;
-    std::string iarCCompilerFlags;
-    std::string iarCxxCompilerFlags;
-    std::string iarLinkerFlags;
-    std::string iarArmPath;
-    std::string compilerDlibConfig;
+    std::string buildType           ;
+    std::string iarCCompilerFlags   ;
+    std::string iarCxxCompilerFlags ;
+    std::string iarLinkerFlags      ;
+    std::string iarArmPath          ;
+    std::string compilerDlibConfig  ;
     int compilerDlibConfigId;
-    std::string compilerPathExe;
-    std::string cpuName;
-    std::string systemName;
-    std::string dbgExtraOptions;
-	std::string dbgCspyFlashLoaderv3;
-    std::string dbgCspyMacfile;
-    std::string dbgCspyMemfile;
-    std::string dbgIjetProbeconfig;
-    std::string dbgLogFile;
-    std::string linkerEntryRoutine;
-    std::string linkerIcfFile;
-    std::string linkerIcfOverride;
+    std::string compilerPathExe     ;
+    std::string cpuName             ;
+    std::string systemName          ;
+    std::string dbgExtraOptions     ;
+    std::string dbgCspyFlashLoaderv3;
+    std::string dbgCspyMacfile      ;
+    std::string dbgCspyMemfile      ;
+    std::string dbgProbeSelection   ;
+    std::string dbgIjetProbeconfig  ;
+    std::string dbgLogFile          ;
+    std::string dbgStLinkInterface  ;
+    std::string linkerEntryRoutine  ;
+    std::string linkerIcfFile       ;
     std::string linkerUseFlashLoader;
-    std::string tgtArch;
-    std::string wbVersion;
-    std::string chipSelection;
-    std::string rtos;
-    std::string compilerPreInclude;
+    std::string tgtArch             ;
+    std::string wbVersion           ;
+    std::string chipSelection       ;
+    std::string rtos                ;
+    std::string compilerPreInclude  ;
     std::string genLowLevelInterface;
-    std::string CCEnableRemarks;
-    std::string CCDiagSuppress;
-    std::string CCDiagWarnAreErr;
-    std::string CCOptLevel;
-    std::string CCOptLevelSlave;
-    std::string scanfFmt;
-    std::string printfFmt;
-    int scanfFmtId;
-    int printfFmtId;
+    std::string CCEnableRemarks     ;
+    std::string CCDiagSuppress      ;
+    std::string CCDiagWarnAreErr    ;
+    std::string CCOptLevel          ;
+    std::string CCOptLevelSlave     ;
+    std::string cxxExtraOptionsOverride;
+    std::string scanfFmt  ;
+    std::string printfFmt  ;
+    int scanfFmtId  ;
+    int printfFmtId  ;
     std::string bufferedTermOut;
     std::string semihostingEnabled;
   };
