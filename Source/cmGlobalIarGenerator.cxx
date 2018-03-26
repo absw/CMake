@@ -23,6 +23,7 @@
 #include "cmTarget.h"
 #include "cmGeneratorTarget.h"
 #include "cmSourceFile.h"
+#include "cmState.h"
 #include "cmSystemTools.h"
 #include <stdlib.h>
 #include <cstdlib>
@@ -677,16 +678,30 @@ void cmGlobalIarGenerator::Generate()
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_CSPY_MEMFILE");
   GLOBALCFG.dbgIjetProbeconfig =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_IJET_PROBECONFIG");
-  GLOBALCFG.dbgProbeSelection =
-      globalMakefile->GetSafeDefinition("IAR_DEBUGGER_PROBE");
   GLOBALCFG.dbgLogFile =
       globalMakefile->GetSafeDefinition("IAR_DEBUGGER_LOGFILE");
   GLOBALCFG.linkerEntryRoutine =
       globalMakefile->GetSafeDefinition("IAR_LINKER_ENTRY_ROUTINE");
   GLOBALCFG.linkerIcfFile =
       globalMakefile->GetSafeDefinition("IAR_LINKER_ICF_FILE");
+  GLOBALCFG.linkerIcfOverride =
+      globalMakefile->GetSafeDefinition("IAR_LINKER_ICF_OVERRIDE");
   GLOBALCFG.tgtArch =
       globalMakefile->GetSafeDefinition("IAR_TARGET_ARCHITECTURE");
+  GLOBALCFG.genLowLevelInterface =
+      globalMakefile->GetSafeDefinition("IAR_GEN_LOW_LEVEL_INTERFACE");
+  GLOBALCFG.CCEnableRemarks =
+      globalMakefile->GetSafeDefinition("IAR_CC_ENABLE_REMARKS");
+  GLOBALCFG.CCOptLevel =
+      globalMakefile->GetSafeDefinition("IAR_CC_OPT_LEVEL");
+  GLOBALCFG.CCOptLevelSlave =
+      globalMakefile->GetSafeDefinition("IAR_CC_OPT_LEVEL_SLAVE");
+  GLOBALCFG.linkerUseFlashLoader =
+      globalMakefile->GetSafeDefinition("IAR_USE_FLASH_LOADER");
+  GLOBALCFG.CCDiagSuppress =
+      globalMakefile->GetSafeDefinition("IAR_CC_DIAG_SUPPRESS");
+  GLOBALCFG.CCDiagWarnAreErr =
+      globalMakefile->GetSafeDefinition("IAR_CC_DIAG_WARN_ARE_ERR");
 
   GLOBALCFG.rtos = globalMakefile->GetSafeDefinition("IAR_TARGET_RTOS");
 
@@ -1141,12 +1156,13 @@ void cmGlobalIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
 
   cmGlobalIarGenerator::BuildConfig buildCfg;
   buildCfg.name = GLOBALCFG.buildType;
-  buildCfg.isDebug = (GLOBALCFG.buildType == "Debug");
+  buildCfg.isDebug = (GLOBALCFG.buildType != "Release");
   buildCfg.exeDir = buildCfg.name;
-  buildCfg.objectDir = buildCfg.exeDir;
-  buildCfg.objectDir += "/Object";
-  buildCfg.listDir = buildCfg.exeDir;
-  buildCfg.listDir += "/List";
+  buildCfg.exeDir += "/Exe";
+  buildCfg.objectDir = buildCfg.name;
+  buildCfg.objectDir += "/Obj";
+  buildCfg.listDir = buildCfg.name;
+  buildCfg.listDir += "/Lst";
   buildCfg.toolchain = GLOBALCFG.tgtArch;
   buildCfg.outputFile = genTgt->GetExportName();
 
@@ -1306,28 +1322,19 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   IarSettings* generalSettings = new IarSettings("General", 3);
   config->AddChild(generalSettings);
 
-  IarData* generalData = generalSettings->NewData(21, true, this->buildCfg.isDebug);
+  IarData* generalData = generalSettings->NewData(24, true, this->buildCfg.isDebug);
   generalData->NewOption("ExePath")->NewState(this->buildCfg.exeDir);
-  generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir + "/" + this->name);
-  generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir + "/" + this->name);
-  generalData->NewOption("Variant", 20)->NewState("42");
+  generalData->NewOption("ObjPath")->NewState(this->buildCfg.objectDir);
+  generalData->NewOption("ListPath")->NewState(this->buildCfg.listDir);
   generalData->NewOption("GEndianMode")->NewState("0");
-
-
-  std::string pPrintfIdStr = int2str(GLOBALCFG.printfFmtId);
-  std::string pScanfIdStr = int2str(GLOBALCFG.scanfFmtId);
-
-  generalData->NewOption("Input variant", 3)->NewState(pPrintfIdStr);
+  generalData->NewOption("Input variant", 3)->NewState("0");
   generalData->NewOption("Input description")
-              ->NewState("No specifier n, no float nor "
-                  "long long, no scan set,"
-                  " no assignment suppressing, without multibyte support.");
-  generalData->NewOption("Output variant", 2)->NewState(pScanfIdStr);
+              ->NewState("Automatic choice of formatter.");
+  generalData->NewOption("Output variant", 2)->NewState("0");
   generalData->NewOption("Output description")
-                ->NewState("No specifier a, A, without multibyte support.");
+                ->NewState("Automatic choice of formatter.");
   generalData->NewOption("GOutputBinary")
                 ->NewState(this->isLib ? "1" : "0");
-  generalData->NewOption("FPU", 2)->NewState("3");
   generalData->NewOption("OGCoreOrChip")->NewState("1");
 
 
@@ -1355,7 +1362,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   const char* pGenLowLevelIfaceStr = GLOBALCFG.semihostingEnabled == "ON" ? "1" : "0";
 
   generalData->NewOption("GenLowLevelInterface")
-                ->NewState(pGenLowLevelIfaceStr);
+	  ->NewState(cmSystemTools::IsOn(GLOBALCFG.genLowLevelInterface.c_str()) ? "1" : "0");
   generalData->NewOption("GEndianModeBE")->NewState("1");
 
   const char* pBufferedStr = GLOBALCFG.bufferedTermOut == "ON" ? "1" : "0";
@@ -1372,8 +1379,8 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
                     "00101111011110101011111111111111111111111111011111110"
                     "11111001111011111011111111111111111");
   generalData->NewOption("RTConfigPath2")
-              ->NewState(std::string("$TOOLKIT_DIR$\\INC\\c\\DLib_Config_") + cmGlobalIarGenerator::GLOBALCFG.compilerDlibConfig + ".h");
-  generalData->NewOption("GFPUCoreSlave", 20)->NewState("42");
+              ->NewState(std::string("$TOOLKIT_DIR$\\INC\\c\\DLib_Config_") + cmExtraIarGenerator::GLOBALCFG.compilerDlibConfig + ".h");
+  generalData->NewOption("GFPUCoreSlave2", 20)->NewState("42");
   generalData->NewOption("GBECoreSlave", 20)->NewState("42");
   generalData->NewOption("OGUseCmsis")->NewState("0");
   generalData->NewOption("OGUseCmsisDspLib")->NewState("0");
@@ -1395,9 +1402,10 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCListCMessages")->NewState("0");
   iccArmData->NewOption("CCListAssFile")->NewState("0");
   iccArmData->NewOption("CCListAssSource")->NewState("0");
-  iccArmData->NewOption("CCEnableRemarks")->NewState("0");
+  iccArmData->NewOption("CCEnableRemarks")
+                ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.CCEnableRemarks.c_str()) ? "1" : "0");
   iccArmData->NewOption("CCDiagSuppress")
-                ->NewState(this->buildCfg.isDebug ? "Pa050, Pe161" : "Pa050" );
+                ->NewState(GLOBALCFG.CCDiagSuppress.c_str());
   iccArmData->NewOption("CCDiagRemark")->NewState("");
   iccArmData->NewOption("CCDiagWarning")->NewState("");
   iccArmData->NewOption("CCDiagError")->NewState("");
@@ -1413,7 +1421,8 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCSignedPlainChar")->NewState("1");
   iccArmData->NewOption("CCRequirePrototypes")->NewState("0");
   iccArmData->NewOption("CCMultibyteSupport")->NewState("0");
-  iccArmData->NewOption("CCDiagWarnAreErr")->NewState("0");
+  iccArmData->NewOption("CCDiagWarnAreErr")
+      ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.CCDiagWarnAreErr.c_str()) ? "1" : "0");
   iccArmData->NewOption("CCCompilerRuntimeInfo")->NewState("0");
   iccArmData->NewOption("IFpuProcessor")->NewState("1");
   iccArmData->NewOption("OutputFile")->NewState("$FILE_BNAME$.o");
@@ -1426,10 +1435,10 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCCodeSection")->NewState(".text");
   iccArmData->NewOption("IInterwork2")->NewState("0");
   iccArmData->NewOption("IProcessorMode2")->NewState("1");
-  iccArmData->NewOption("CCOptLevel")->NewState(this->buildCfg.isDebug ? "0" : "3");
+  iccArmData->NewOption("CCOptLevel")->NewState(cmExtraIarGenerator::GLOBALCFG.CCOptLevel);
   iccArmData->NewOption("CCOptStrategy", 0)->NewState("1");
   iccArmData->NewOption("CCOptLevelSlave")
-                ->NewState(this->buildCfg.isDebug ? "0" : "3");
+                ->NewState(cmExtraIarGenerator::GLOBALCFG.CCOptLevelSlave);
   iccArmData->NewOption("CompilerMisraRules98", 0)
                 ->NewState("100011111011010110111001110011111110111001101100010111"
                     "011110110110011111111111110011001111100111011100111111"
@@ -1444,7 +1453,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("IccLang")->NewState("2");
   iccArmData->NewOption("IccCDialect")->NewState("1");
   iccArmData->NewOption("IccAllowVLA")->NewState("0");
-  iccArmData->NewOption("IccCppDialect")->NewState("2");
+  iccArmData->NewOption("IccCppDialect")->NewState("1");
   iccArmData->NewOption("IccExceptions")->NewState("0");
   iccArmData->NewOption("IccRTTI")->NewState("0");
   iccArmData->NewOption("IccStaticDestr")->NewState("0");
@@ -1503,14 +1512,14 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   config->AddChild(objCopySettings);
   IarData* objCopyData = objCopySettings->NewData(1, true, this->buildCfg.isDebug);
 
-  objCopyData->NewOption("OOCOutputFormat", 2)->NewState("2");
+  objCopyData->NewOption("OOCOutputFormat", 3)->NewState("3");
   objCopyData->NewOption("OCOutputOverride")->NewState("0");
 
   std::string outFile = this->buildCfg.outputFile;
   outFile += ".bin";
   objCopyData->NewOption("OOCOutputFile")->NewState(outFile);
   objCopyData->NewOption("OOCCommandLineProducer")->NewState("1");
-  objCopyData->NewOption("OOCObjCopyEnable")->NewState("0");
+  objCopyData->NewOption("OOCObjCopyEnable")->NewState("1");
 
 
   // CUSTOM:
@@ -1541,7 +1550,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   IarData* ilinkData = ilinkSettings->NewData(15, true, this->buildCfg.isDebug);
 
   outFile = this->buildCfg.outputFile;
-  outFile += ".elf";
+  outFile += ".out";
   ilinkData->NewOption("IlinkOutputFile")->NewState(outFile);
   ilinkData->NewOption("IlinkLibIOConfig")->NewState("1");
   ilinkData->NewOption("XLinkMisraHandler")->NewState("0");
@@ -1561,7 +1570,8 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   ilinkData->NewOption("IlinkLogModule")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogSection")->NewState(this->buildCfg.isDebug ? "1" : "0");
   ilinkData->NewOption("IlinkLogVeneer")->NewState(this->buildCfg.isDebug ? "1" : "0");
-  ilinkData->NewOption("IlinkIcfOverride")->NewState("1");
+  ilinkData->NewOption("IlinkIcfOverride")
+                ->NewState(cmExtraIarGenerator::GLOBALCFG.linkerIcfOverride);
   ilinkData->NewOption("IlinkIcfFile")->NewState(this->buildCfg.icfPath);
   ilinkData->NewOption("IlinkIcfFileSlave")->NewState("");
   ilinkData->NewOption("IlinkEnableRemarks")->NewState("0");
@@ -1734,25 +1744,12 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
     cspyData->NewOption("OCDownloadVerifyAll")->NewState("1");
     cspyData->NewOption("OCProductVersion")->NewState(GLOBALCFG.wbVersion);
 
-    if (GLOBALCFG.dbgProbeSelection == "J-Link")
-    {
-        cspyData->NewOption("OCDynDriverList")->NewState("JLINK_ID");
-    }
-    else if (GLOBALCFG.dbgProbeSelection == "I-Jet")
-    {
-        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
-    }
-    else
-    {
-        // I-Jet is the default probe.
-        cspyData->NewOption("OCDynDriverList")->NewState("IJET_ID");
-    }
-
     cspyData->NewOption("OCLastSavedByProductVersion")
             ->NewState(GLOBALCFG.wbVersion);
     cspyData->NewOption("OCDownloadAttachToProgram")->NewState("0");
 
-    cspyData->NewOption("UseFlashLoader")->NewState("0");
+    cspyData->NewOption("UseFlashLoader")
+            ->NewState(cmSystemTools::IsOn(cmExtraIarGenerator::GLOBALCFG.linkerUseFlashLoader.c_str()) ? "1" : "0");
     cspyData->NewOption("CLowLevel")->NewState("1");
     cspyData->NewOption("OCBE8Slave")->NewState("1");
     cspyData->NewOption("MacFile2")->NewState("");
