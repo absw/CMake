@@ -263,6 +263,9 @@ private:
     /// Compiler options <state></state>
     std::vector<std::string> compilerOpts;
 
+    // C++ only options
+    std::string cxxExtraOptionsOverride;
+
     /// Linker keep symbols <state></state>
     std::vector<std::string> linkerKeepSymbols;
 
@@ -354,6 +357,7 @@ private:
     std::string CCDiagWarnAreErr    ;
     std::string CCOptLevel          ;
     std::string CCOptLevelSlave     ;
+    std::string cxxExtraOptionsOverride;
     std::string scanfFmt  ;
     std::string printfFmt  ;
     int scanfFmtId  ;

@@ -44,6 +44,10 @@ const char* cmGlobalIarGenerator::PROJ_FILE_EXT = ".ewp";
 const char* cmGlobalIarGenerator::WS_FILE_EXT = ".eww";
 const char* cmGlobalIarGenerator::DEFAULT_MAKE_PROGRAM = "IarBuild";
 
+/// @brief IAR project file format constants.
+const int IccArmVersion = 28;
+const int IccArchiveVersion = 2;
+
 
 /// @brief Global configuration of the project (it should be visible
 /// from everywhere).
@@ -89,11 +93,11 @@ class XmlNode
   /// @brief Children vector.
   std::vector<XmlNode*> children;
 
-  /// @brief Simple printing helper table for tabs up to 11 levels.
+  /// @brief Simple printing helper table for tabs up to 13 levels.
   static const char* LEVELS[];
 
 public:
-  XmlNode(std::string name, std::string value) :
+  XmlNode(const std::string &name, const std::string &value) :
   nodeName(name), plainValue(value)
 {
   // Just copy values.
@@ -105,7 +109,7 @@ public:
   }
 
   /// This function creates a new child node (dynamic memory allocation).
-  XmlNode* NewChild(std::string name, std::string value)
+  XmlNode* NewChild(const std::string &name, const std::string &value)
   {
     XmlNode* child = new XmlNode(name, value);
     children.push_back(child);
@@ -113,7 +117,7 @@ public:
   }
 
   /// This function creates a new child node (dynamic memory allocation).
-  XmlNode* NewChild(std::string name)
+  XmlNode* NewChild(const std::string &name)
   {
     XmlNode* child = new XmlNode(name);
     children.push_back(child);
@@ -129,7 +133,7 @@ public:
     return this;
   }
 
-  void AddAttr(std::string name, std::string value)
+  void AddAttr(const std::string &name, const std::string &value)
   {
     attrs.push_back(std::make_pair(name, value));
   }
@@ -178,181 +182,76 @@ public:
       }
 
     if (!moreThanOnce)
-      {
+    {
       if (this->plainValue.empty())
-        {
-        outStr[outStr.length()-1] = '/';
+      {
+        outStr[outStr.length() - 1] = '/';
         outStr += ">\n";
         // Do not append close tag.
-        }
+      }
       else
-        {
+      {
         outStr += this->plainValue;
         this->AppendCloseTag(outStr, level);
-        }
       }
+    }
     else
-      {
+    {
       outStr += LEVELS[level];
       this->AppendCloseTag(outStr, level);
-      }
+    }
   }
 
   virtual ~XmlNode()
   {
-    for(std::vector<XmlNode*>::iterator it = this->children.begin();
-        it != this->children.end();
-        ++it)
-      {
+    for (std::vector<XmlNode*>::iterator it = this->children.begin();
+      it != this->children.end();
+      ++it)
+    {
       delete *it;
-      }
+    }
   }
 };
 
 const char* XmlNode::LEVELS[] =
-    {
-        "",
-        "\t",
-        "\t\t",
-        "\t\t\t",
-        "\t\t\t\t",
-        "\t\t\t\t\t",
-        "\t\t\t\t\t\t",
-        "\t\t\t\t\t\t\t",
-        "\t\t\t\t\t\t\t\t",
-        "\t\t\t\t\t\t\t\t\t",
-        "\t\t\t\t\t\t\t\t\t\t"
-    };
+{
+    "",
+    "\t",
+    "\t\t",
+    "\t\t\t",
+    "\t\t\t\t",
+    "\t\t\t\t\t",
+    "\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t\t\t\t",
+    "\t\t\t\t\t\t\t\t\t\t\t\t",
+};
 
 const char* RUNTIME_LIBRARY_CONFIG[] =
-    {
-        "None"  , // 0
-        "Normal", // 1
-        "Full"  , // 2
-        "Custom"  // 3
-    };
-
+{
+    "None"  , // 0
+    "Normal", // 1
+    "Full"  , // 2
+    "Custom"  // 3
+};
 
 const char* SCANF_PRINTF_FORMATTING[] =
-    {
-        "Auto"  , // 0
-        "Full", // 1
-        "Full without multibytes"  , // 2
-        "Large", // 3
-        "Large without multibytes"  , // 4
-        "Small", // 5
-        "Small without multibytes"  , // 6
-        "Tiny"  // 7
-    };
+{
+    "Auto"  , // 0
+    "Full", // 1
+    "Full without multibytes"  , // 2
+    "Large", // 3
+    "Large without multibytes"  , // 4
+    "Small", // 5
+    "Small without multibytes"  , // 6
+    "Tiny"  // 7
+};
 
 const int SCANF_FORMATTING_CNT = 7;
 const int PRINTF_FORMATTING_CNT = 8;
-
-
-class FileTreeNode
-{
-public:
-  std::string ftNodeName;
-
-  std::vector<FileTreeNode*> children;
-
-  FileTreeNode(std::string name) : ftNodeName(name)
-  {
-
-  }
-
-  void TransformToIarTree(XmlNode* root)
-  {
-    if (!this->children.empty())
-      {
-      XmlNode* group = root->NewChild("group");
-      group->NewChild("name", this->ftNodeName);
-
-      for (std::vector<FileTreeNode*>::const_iterator it =
-          this->children.begin();
-          it != this->children.end();
-          ++it)
-        {
-        (*it)->TransformToIarTree(group);
-        }
-
-      }
-    else
-      {
-      XmlNode* file = root->NewChild("file");
-      file->NewChild("name", this->ftNodeName);
-      }
-  }
-
-  FileTreeNode* NewNode(std::string name)
-  {
-    FileTreeNode* node = new FileTreeNode(name);
-    children.push_back(node);
-    return node;
-  }
-
-  static void AddToTree(FileTreeNode* root, std::string path,
-      const std::string& fullpath)
-  {
-    size_t slashPos = path.find_first_of("/\\");
-    std::string currentChunk;
-    std::string restOfPath;
-    if (slashPos != std::string::npos)
-      {
-      currentChunk = path.substr(0, slashPos);
-      restOfPath = path.substr(slashPos+1);
-      }
-    else
-      {
-      currentChunk = path;
-      restOfPath = "";
-      }
-
-    if (!currentChunk.empty())
-      {
-      bool found = false;
-      for (std::vector<FileTreeNode*>::const_iterator it =
-          root->children.begin();
-          it != root->children.end();
-          ++it)
-        {
-        if ((*it)->ftNodeName == currentChunk)
-          {
-          // Found, move in tree.
-          AddToTree(*it, restOfPath, fullpath);
-          found = true;
-          break;
-          }
-        }
-
-      if (!found)
-        {
-        if (restOfPath.empty())
-          {
-          // Not found, create new and finish.
-          root->NewNode(fullpath);
-          return;
-          }
-        else
-          {
-          // Not found, create new and move inside.
-          FileTreeNode* newNode = root->NewNode(currentChunk);
-          AddToTree(newNode, restOfPath, fullpath);
-          }
-        }
-      }
-  }
-
-  virtual ~FileTreeNode()
-  {
-    for(std::vector<FileTreeNode*>::iterator it = children.begin();
-        it != children.end();
-        ++it)
-      {
-      delete *it;
-      }
-  }
-};
 
 class IarOption : public XmlNode
 {
@@ -412,7 +311,6 @@ public:
 }
 };
 
-
 class IarData : public XmlNode
 {
 private:
@@ -421,31 +319,30 @@ private:
   bool dataDebug;
 public:
   IarData(int version, bool wantNonLocal, bool debug) :
-  XmlNode("data"),
-  dataVersion(version),
-  dataWantNonLocal(wantNonLocal),
-  dataDebug(debug)
-{
-  this->NewChild("version", int2str(dataVersion));
-  this->NewChild("wantNonLocal", dataWantNonLocal ? "1" : "0");
-  this->NewChild("debug", dataDebug ? "1" : "0");
-}
+    XmlNode("data"),
+    dataVersion(version),
+    dataWantNonLocal(wantNonLocal),
+    dataDebug(debug)
+  {
+    this->NewChild("version", int2str(dataVersion));
+    this->NewChild("wantNonLocal", dataWantNonLocal ? "1" : "0");
+    this->NewChild("debug", dataDebug ? "1" : "0");
+  }
 
-  IarOption* NewOption(std::string name, int version)
+  IarOption* NewOption(const std::string &name, int version)
   {
     IarOption* option = new IarOption(name, version);
     this->AddChild(option);
     return option;
   }
 
-  IarOption* NewOption(std::string name)
+  IarOption* NewOption(const std::string &name)
   {
     IarOption* option = new IarOption(name);
     this->AddChild(option);
     return option;
   }
 };
-
 
 class IarSettings : public XmlNode
 {
@@ -476,39 +373,138 @@ public:
   }
 };
 
-
-class IarFsNode : public XmlNode
+class FileTreeNode
 {
-private:
-  std::string fsPath;
-  bool fsIsDir;
+public:
+  std::string ftNodeName;
 
-  std::string GetLastDir(std::string path)
+  std::vector<FileTreeNode*> children;
+
+  FileTreeNode(const std::string &name) :
+    ftNodeName(name)
   {
-    size_t position = path.find_last_of("/\\");
-    if (position != std::string::npos)
-      {
-      return path.substr(position+1);
-      }
-    return std::string("");
   }
 
-public:
-  IarFsNode(std::string path,
-      bool isDir) :
-      XmlNode(isDir ? "group" : "file"),
-      fsPath(path),
-      fsIsDir(isDir)
-{
-  this->NewChild("name", isDir ? GetLastDir(fsPath) : fsPath);
-
-}
-
-  IarData* NewData(int version, bool wantNonLocal, bool debug)
+  void TransformToIarTree(XmlNode* root,
+                          const std::string &configName,
+                          bool isDebug,
+                          const std::string &cxxExtraOptionsOverride)
   {
-    IarData* data = new IarData(version, wantNonLocal, debug);
-    this->AddChild(data);
-    return data;
+    if (!this->children.empty())
+    {
+      XmlNode* group = root->NewChild("group");
+      group->NewChild("name", this->ftNodeName);
+
+      for (std::vector<FileTreeNode*>::const_iterator it =
+        this->children.begin();
+        it != this->children.end();
+        ++it)
+      {
+        (*it)->TransformToIarTree(group, configName, isDebug, cxxExtraOptionsOverride);
+      }
+    }
+    else
+    {
+      XmlNode* file = root->NewChild("file");
+      file->NewChild("name", this->ftNodeName);
+      const std::string FileExtension = GetFileExtension(this->ftNodeName);
+      if ((cmSystemTools::GetFileFormat(FileExtension.c_str()) == cmSystemTools::CXX_FILE_FORMAT) &&
+        !cxxExtraOptionsOverride.empty())
+      {
+        XmlNode* config = file->NewChild("configuration");
+        config->NewChild("name", configName);
+
+        IarSettings* iccArmSettings = new IarSettings("ICCARM", IccArchiveVersion);
+        config->AddChild(iccArmSettings);
+        const bool WantNonLocal = false;
+        IarData* iccArmData = iccArmSettings->NewData(IccArmVersion, WantNonLocal, isDebug);
+
+        iccArmData->NewOption("IExtraOptionsCheck")->NewState("1");
+        iccArmData->NewOption("IExtraOptions")->NewState(cxxExtraOptionsOverride);
+      }
+    }
+  }
+
+  FileTreeNode* NewNode(std::string name)
+  {
+    FileTreeNode* node = new FileTreeNode(name);
+    children.push_back(node);
+    return node;
+  }
+
+  static void AddToTree(FileTreeNode* root, std::string path,
+    const std::string& fullpath)
+  {
+    size_t slashPos = path.find_first_of("/\\");
+    std::string currentChunk;
+    std::string restOfPath;
+    if (slashPos != std::string::npos)
+    {
+      currentChunk = path.substr(0, slashPos);
+      restOfPath = path.substr(slashPos + 1);
+    }
+    else
+    {
+      currentChunk = path;
+      restOfPath = "";
+    }
+
+    if (!currentChunk.empty())
+    {
+      bool found = false;
+      for (std::vector<FileTreeNode*>::const_iterator it =
+        root->children.begin();
+        it != root->children.end();
+        ++it)
+      {
+        if ((*it)->ftNodeName == currentChunk)
+        {
+          // Found, move in tree.
+          AddToTree(*it, restOfPath, fullpath);
+          found = true;
+          break;
+        }
+      }
+
+      if (!found)
+      {
+        if (restOfPath.empty())
+        {
+          // Not found, create new and finish.
+          root->NewNode(fullpath);
+          return;
+        }
+        else
+        {
+          // Not found, create new and move inside.
+          FileTreeNode* newNode = root->NewNode(currentChunk);
+          AddToTree(newNode, restOfPath, fullpath);
+        }
+      }
+    }
+  }
+
+  static std::string GetFileExtension(const std::string &filename)
+  {
+    auto dotPosition = filename.rfind('.');
+    if (dotPosition != std::string::npos) {
+      auto extension = filename.substr(dotPosition + 1);
+#if defined(_WIN32) || defined(__APPLE__)
+      extension = cmSystemTools::LowerCase(extension);
+#endif
+      return extension;
+    }
+    return "";
+  }
+
+  virtual ~FileTreeNode()
+  {
+    for (std::vector<FileTreeNode*>::iterator it = children.begin();
+      it != children.end();
+      ++it)
+    {
+      delete *it;
+    }
   }
 };
 
@@ -697,6 +693,8 @@ void cmGlobalIarGenerator::Generate()
     globalMakefile->GetSafeDefinition("IAR_CC_DIAG_SUPPRESS");
   GLOBALCFG.CCDiagWarnAreErr =
     globalMakefile->GetSafeDefinition("IAR_CC_DIAG_WARN_ARE_ERR");
+  GLOBALCFG.cxxExtraOptionsOverride =
+    globalMakefile->GetSafeDefinition("IAR_CXX_EXTRA_OPTIONS");
 
   GLOBALCFG.rtos = globalMakefile->GetSafeDefinition("IAR_TARGET_RTOS");
 
@@ -1164,17 +1162,22 @@ void cmGlobalIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
 
   // Get target-specific properties
   const auto &targetProperties = tgt.GetProperties();
-  const std::string LinkerIcfFilePropertyId = "IAR_LINKER_ICF_FILE";
-  const auto LinkerIcfFile = targetProperties.GetPropertyValue(LinkerIcfFilePropertyId);
+
+  const auto LinkerIcfFile = targetProperties.GetPropertyValue("IAR_LINKER_ICF_FILE");
   if (LinkerIcfFile != nullptr)
   {
     buildCfg.icfPath = LinkerIcfFile;
   }
+  const auto CxxExtraOptionsOverride = targetProperties.GetPropertyValue("IAR_CXX_EXTRA_OPTIONS");
+  if (CxxExtraOptionsOverride != nullptr)
+  {
+    buildCfg.cxxExtraOptionsOverride = CxxExtraOptionsOverride;
+  }
 
+  // Prebuild & postbuild.    
   std::string prebuild = project->binaryDir + "/" + buildCfg.exeDir+"/"+project->name+"_prebuild.bat";
   std::string postbuild = project->binaryDir + "/" + buildCfg.exeDir+"/"+project->name+"_postbuild.bat";
 
-  // Prebuild & postbuild.
   std::string buildCmd = "";
   buildCmd.reserve(2048);
 
@@ -1391,11 +1394,11 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   generalData->NewOption("OGUseCmsisDspLib")->NewState("0");
 
   // ARM Compiler (ICCARM):
-  IarSettings* iccArmSettings = new IarSettings("ICCARM", 2);
+  IarSettings* iccArmSettings = new IarSettings("ICCARM", IccArchiveVersion);
   config->AddChild(iccArmSettings);
 
 
-  IarData* iccArmData = iccArmSettings->NewData(28, true, this->buildCfg.isDebug);
+  IarData* iccArmData = iccArmSettings->NewData(IccArmVersion, true, this->buildCfg.isDebug);
 
   iccArmData->NewOption("CCOptimizationNoSizeConstraints")->NewState("0");
   iccArmData->NewOption("CCDefines")->NewStates(this->buildCfg.compileDefs);
@@ -1418,7 +1421,7 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
   iccArmData->NewOption("CCDebugInfo")->NewState(this->buildCfg.isDebug ? "1" : "0");
   iccArmData->NewOption("IEndianMode")->NewState("1");
   iccArmData->NewOption("IProcessor")->NewState("1");
-  iccArmData->NewOption("IExtraOptionsCheck")->NewState("1");
+  iccArmData->NewOption("IExtraOptionsCheck")->NewState(this->buildCfg.compilerOpts.empty() ? "0" : "1");
   iccArmData->NewOption("IExtraOptions")->NewStates(this->buildCfg.compilerOpts);
   iccArmData->NewOption("CCLangConformance")->NewState("0");
   iccArmData->NewOption("CCSignedPlainChar")->NewState("1");
@@ -1668,7 +1671,10 @@ void cmGlobalIarGenerator::Project::CreateProjectFile()
 
     }
 
-  ftRoot.TransformToIarTree(&root);
+  ftRoot.TransformToIarTree(&root, 
+                            this->buildCfg.name, 
+                            this->buildCfg.isDebug, 
+                            this->buildCfg.cxxExtraOptionsOverride);
   root.AddChild(groupExternal);
 
 
