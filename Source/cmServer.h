@@ -2,10 +2,13 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #pragma once
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include "cm_jsoncpp_value.h"
+#include "cm_thread.hxx"
 #include "cm_uv.h"
+
+#include "cmUVHandlePtr.h"
 
 #include <memory> // IWYU pragma: keep
 #include <string>
@@ -37,13 +40,12 @@ public:
    * This should almost always be called by the given connections
    * directly.
    *
-   * @param connection The connectiont the request was received on
+   * @param connection The connection the request was received on
    * @param request The actual request
    */
   virtual void ProcessRequest(cmConnection* connection,
                               const std::string& request) = 0;
   virtual void OnConnected(cmConnection* connection);
-  virtual void OnDisconnect();
 
   /***
    * Start a dedicated thread. If this is used to start the server, it will
@@ -58,19 +60,30 @@ public:
 
   virtual bool OnSignal(int signum);
   uv_loop_t* GetLoop();
-
+  void Close();
   void OnDisconnect(cmConnection* pConnection);
 
 protected:
-  std::vector<std::unique_ptr<cmConnection> > Connections;
+  mutable cm::shared_mutex ConnectionsMutex;
+  std::vector<std::unique_ptr<cmConnection>> Connections;
 
   bool ServeThreadRunning = false;
   uv_thread_t ServeThread;
+  cm::uv_async_ptr ShutdownSignal;
+#ifndef NDEBUG
+public:
+  // When the server starts it will mark down it's current thread ID,
+  // which is useful in other contexts to just assert that operations
+  // are performed on that same thread.
+  uv_thread_t ServeThreadId = {};
+
+protected:
+#endif
 
   uv_loop_t Loop;
 
-  uv_signal_t SIGINTHandler;
-  uv_signal_t SIGHUPHandler;
+  cm::uv_signal_ptr SIGINTHandler;
+  cm::uv_signal_ptr SIGHUPHandler;
 };
 
 class cmServer : public cmServerBase
@@ -139,22 +152,6 @@ private:
 
   cmServerProtocol* Protocol = nullptr;
   std::vector<cmServerProtocol*> SupportedProtocols;
-
-  std::string DataBuffer;
-  std::string JsonData;
-
-  typedef union
-  {
-    uv_tty_t tty;
-    uv_pipe_t pipe;
-  } InOutUnion;
-
-  InOutUnion Input;
-  InOutUnion Output;
-  uv_stream_t* InputStream = nullptr;
-  uv_stream_t* OutputStream = nullptr;
-
-  mutable bool Writing = false;
 
   friend class cmServerProtocol;
   friend class cmServerRequest;

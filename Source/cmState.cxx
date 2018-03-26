@@ -63,12 +63,12 @@ const char* cmState::GetTargetTypeName(cmStateEnums::TargetType targetType)
       return "UNKNOWN_LIBRARY";
   }
   assert(false && "Unexpected target type");
-  return CM_NULLPTR;
+  return nullptr;
 }
 
 const char* cmCacheEntryTypes[] = { "BOOL",          "PATH",     "FILEPATH",
                                     "STRING",        "INTERNAL", "STATIC",
-                                    "UNINITIALIZED", CM_NULLPTR };
+                                    "UNINITIALIZED", nullptr };
 
 const char* cmState::CacheEntryTypeToString(cmStateEnums::CacheEntryType type)
 {
@@ -93,7 +93,7 @@ cmStateEnums::CacheEntryType cmState::StringToCacheEntryType(const char* s)
 bool cmState::IsCacheEntryType(std::string const& key)
 {
   for (int i = 0; cmCacheEntryTypes[i]; ++i) {
-    if (strcmp(key.c_str(), cmCacheEntryTypes[i]) == 0) {
+    if (key == cmCacheEntryTypes[i]) {
       return true;
     }
   }
@@ -107,9 +107,9 @@ bool cmState::LoadCache(const std::string& path, bool internal,
   return this->CacheManager->LoadCache(path, internal, excludes, includes);
 }
 
-bool cmState::SaveCache(const std::string& path)
+bool cmState::SaveCache(const std::string& path, cmMessenger* messenger)
 {
-  return this->CacheManager->SaveCache(path);
+  return this->CacheManager->SaveCache(path, messenger);
 }
 
 bool cmState::DeleteCache(const std::string& path)
@@ -132,7 +132,7 @@ const char* cmState::GetCacheEntryValue(std::string const& key) const
 {
   cmCacheManager::CacheEntry* e = this->CacheManager->GetCacheEntry(key);
   if (!e) {
-    return CM_NULLPTR;
+    return nullptr;
   }
   return e->Value.c_str();
 }
@@ -188,7 +188,7 @@ const char* cmState::GetCacheEntryProperty(std::string const& key,
   cmCacheManager::CacheIterator it =
     this->CacheManager->GetCacheIterator(key.c_str());
   if (!it.PropertyExists(propertyName)) {
-    return CM_NULLPTR;
+    return nullptr;
   }
   return it.GetProperty(propertyName);
 }
@@ -224,7 +224,7 @@ void cmState::RemoveCacheEntryProperty(std::string const& key,
                                        std::string const& propertyName)
 {
   this->CacheManager->GetCacheIterator(key.c_str())
-    .SetProperty(propertyName, (void*)CM_NULLPTR);
+    .SetProperty(propertyName, nullptr);
 }
 
 cmStateSnapshot cmState::Reset()
@@ -303,7 +303,7 @@ cmPropertyDefinition const* cmState::GetPropertyDefinition(
       this->PropertyDefinitions.find(scope)->second;
     return &defs.find(name)->second;
   }
-  return CM_NULLPTR;
+  return nullptr;
 }
 
 bool cmState::IsPropertyDefined(const std::string& name,
@@ -436,7 +436,7 @@ cmCommand* cmState::GetCommand(std::string const& name) const
   if (pos != this->BuiltinCommands.end()) {
     return pos->second;
   }
-  return CM_NULLPTR;
+  return nullptr;
 }
 
 std::vector<std::string> cmState::GetCommandNames() const
@@ -444,15 +444,11 @@ std::vector<std::string> cmState::GetCommandNames() const
   std::vector<std::string> commandNames;
   commandNames.reserve(this->BuiltinCommands.size() +
                        this->ScriptedCommands.size());
-  for (std::map<std::string, cmCommand*>::const_iterator cmds =
-         this->BuiltinCommands.begin();
-       cmds != this->BuiltinCommands.end(); ++cmds) {
-    commandNames.push_back(cmds->first);
+  for (auto const& bc : this->BuiltinCommands) {
+    commandNames.push_back(bc.first);
   }
-  for (std::map<std::string, cmCommand*>::const_iterator cmds =
-         this->ScriptedCommands.begin();
-       cmds != this->ScriptedCommands.end(); ++cmds) {
-    commandNames.push_back(cmds->first);
+  for (auto const& sc : this->ScriptedCommands) {
+    commandNames.push_back(sc.first);
   }
   std::sort(commandNames.begin(), commandNames.end());
   commandNames.erase(std::unique(commandNames.begin(), commandNames.end()),
@@ -518,9 +514,9 @@ void cmState::SetSourceDirectory(std::string const& sourceDirectory)
   cmSystemTools::ConvertToUnixSlashes(this->SourceDirectory);
 }
 
-const char* cmState::GetSourceDirectory() const
+std::string const& cmState::GetSourceDirectory() const
 {
-  return this->SourceDirectory.c_str();
+  return this->SourceDirectory;
 }
 
 void cmState::SetBinaryDirectory(std::string const& binaryDirectory)
@@ -599,9 +595,9 @@ unsigned int cmState::GetCacheMinorVersion() const
   return this->CacheManager->GetCacheMinorVersion();
 }
 
-const char* cmState::GetBinaryDirectory() const
+std::string const& cmState::GetBinaryDirectory() const
 {
-  return this->BinaryDirectory.c_str();
+  return this->BinaryDirectory;
 }
 
 cmStateSnapshot cmState::CreateBaseSnapshot()

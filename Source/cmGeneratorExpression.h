@@ -3,12 +3,12 @@
 #ifndef cmGeneratorExpression_h
 #define cmGeneratorExpression_h
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include "cmListFileCache.h"
 
-#include "cm_auto_ptr.hxx"
 #include <map>
+#include <memory> // IWYU pragma: keep
 #include <set>
 #include <string>
 #include <vector>
@@ -39,8 +39,9 @@ public:
     cmListFileBacktrace const& backtrace = cmListFileBacktrace());
   ~cmGeneratorExpression();
 
-  CM_AUTO_PTR<cmCompiledGeneratorExpression> Parse(std::string const& input);
-  CM_AUTO_PTR<cmCompiledGeneratorExpression> Parse(const char* input);
+  std::unique_ptr<cmCompiledGeneratorExpression> Parse(
+    std::string const& input);
+  std::unique_ptr<cmCompiledGeneratorExpression> Parse(const char* input);
 
   enum PreprocessContext
   {
@@ -71,12 +72,12 @@ class cmCompiledGeneratorExpression
   CM_DISABLE_COPY(cmCompiledGeneratorExpression)
 
 public:
-  const char* Evaluate(
-    cmLocalGenerator* lg, const std::string& config, bool quiet = false,
-    cmGeneratorTarget const* headTarget = CM_NULLPTR,
-    cmGeneratorTarget const* currentTarget = CM_NULLPTR,
-    cmGeneratorExpressionDAGChecker* dagChecker = CM_NULLPTR,
-    std::string const& language = std::string()) const;
+  const char* Evaluate(cmLocalGenerator* lg, const std::string& config,
+                       bool quiet = false,
+                       cmGeneratorTarget const* headTarget = nullptr,
+                       cmGeneratorTarget const* currentTarget = nullptr,
+                       cmGeneratorExpressionDAGChecker* dagChecker = nullptr,
+                       std::string const& language = std::string()) const;
   const char* Evaluate(cmLocalGenerator* lg, const std::string& config,
                        bool quiet, cmGeneratorTarget const* headTarget,
                        cmGeneratorExpressionDAGChecker* dagChecker,
@@ -143,13 +144,98 @@ private:
   mutable std::set<cmGeneratorTarget const*> AllTargetsSeen;
   mutable std::set<std::string> SeenTargetProperties;
   mutable std::map<cmGeneratorTarget const*,
-                   std::map<std::string, std::string> >
+                   std::map<std::string, std::string>>
     MaxLanguageStandard;
   mutable std::string Output;
   mutable bool HadContextSensitiveCondition;
   mutable bool HadHeadSensitiveCondition;
   mutable std::set<cmGeneratorTarget const*> SourceSensitiveTargets;
   bool EvaluateForBuildsystem;
+};
+
+class cmGeneratorExpressionInterpreter
+{
+  CM_DISABLE_COPY(cmGeneratorExpressionInterpreter)
+
+public:
+  cmGeneratorExpressionInterpreter(cmLocalGenerator* localGenerator,
+                                   cmGeneratorTarget* generatorTarget,
+                                   const std::string& config,
+                                   const std::string& target,
+                                   const std::string& lang)
+    : LocalGenerator(localGenerator)
+    , GeneratorTarget(generatorTarget)
+    , Config(config)
+    , Target(target)
+    , Language(lang)
+  {
+  }
+  cmGeneratorExpressionInterpreter(cmLocalGenerator* localGenerator,
+                                   cmGeneratorTarget* generatorTarget,
+                                   const std::string& config)
+    : cmGeneratorExpressionInterpreter(localGenerator, generatorTarget, config,
+                                       std::string(), std::string())
+  {
+  }
+
+  const char* Evaluate(const char* expression)
+  {
+    return this->EvaluateExpression(expression);
+  }
+  const char* Evaluate(const std::string& expression)
+  {
+    return this->Evaluate(expression.c_str());
+  }
+  const char* Evaluate(const char* expression, const std::string& property);
+  const char* Evaluate(const std::string& expression,
+                       const std::string& property)
+  {
+    return this->Evaluate(expression.c_str(), property);
+  }
+
+protected:
+  cmGeneratorExpression& GetGeneratorExpression()
+  {
+    return this->GeneratorExpression;
+  }
+
+  cmCompiledGeneratorExpression& GetCompiledGeneratorExpression()
+  {
+    return *(this->CompiledGeneratorExpression);
+  }
+
+  cmLocalGenerator* GetLocalGenerator() { return this->LocalGenerator; }
+
+  cmGeneratorTarget* GetGeneratorTarget() { return this->GeneratorTarget; }
+
+  const std::string& GetTargetName() const { return this->Target; }
+  const std::string& GetLanguage() const { return this->Language; }
+
+  const char* EvaluateExpression(
+    const char* expression,
+    cmGeneratorExpressionDAGChecker* dagChecker = nullptr)
+  {
+    this->CompiledGeneratorExpression =
+      this->GeneratorExpression.Parse(expression);
+
+    if (dagChecker == nullptr) {
+      return this->CompiledGeneratorExpression->Evaluate(
+        this->LocalGenerator, this->Config, false, this->GeneratorTarget);
+    }
+
+    return this->CompiledGeneratorExpression->Evaluate(
+      this->LocalGenerator, this->Config, false, this->GeneratorTarget,
+      dagChecker, this->Language);
+  }
+
+private:
+  cmGeneratorExpression GeneratorExpression;
+  std::unique_ptr<cmCompiledGeneratorExpression> CompiledGeneratorExpression;
+  cmLocalGenerator* LocalGenerator = nullptr;
+  cmGeneratorTarget* GeneratorTarget = nullptr;
+  std::string Config;
+  std::string Target;
+  std::string Language;
 };
 
 #endif

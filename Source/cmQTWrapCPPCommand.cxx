@@ -7,6 +7,8 @@
 #include "cmSourceFile.h"
 #include "cmSystemTools.h"
 
+#include <utility>
+
 class cmExecutionStatus;
 
 // cmQTWrapCPPCommand
@@ -45,7 +47,7 @@ bool cmQTWrapCPPCommand::InitialPass(std::vector<std::string> const& args,
 
       // Compute the name of the header from which to generate the file.
       std::string hname;
-      if (cmSystemTools::FileIsFullPath(j->c_str())) {
+      if (cmSystemTools::FileIsFullPath(*j)) {
         hname = *j;
       } else {
         if (curr && curr->GetPropertyAsBool("GENERATED")) {
@@ -71,14 +73,14 @@ bool cmQTWrapCPPCommand::InitialPass(std::vector<std::string> const& args,
       commandLine.push_back(hname);
 
       cmCustomCommandLines commandLines;
-      commandLines.push_back(commandLine);
+      commandLines.push_back(std::move(commandLine));
 
       std::vector<std::string> depends;
       depends.push_back(moc_exe);
       depends.push_back(hname);
 
       std::string no_main_dependency;
-      const char* no_working_dir = CM_NULLPTR;
+      const char* no_working_dir = nullptr;
       this->Makefile->AddCustomCommandToOutput(
         newName, depends, no_main_dependency, commandLines, "Qt Wrapped File",
         no_working_dir);

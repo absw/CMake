@@ -57,7 +57,10 @@ public:
   /*
   * Determine what program to use for building the project.
   */
-  bool FindMakeProgram(cmMakefile* mf) CM_OVERRIDE;
+  bool FindMakeProgram(cmMakefile* mf) override;
+
+  bool Open(const std::string& bindir, const std::string& projectName,
+      bool dryRun) override;
 
   cmGeneratedFileStream* GetBuildFileStream()
   {
@@ -79,6 +82,7 @@ public:
     GhsMultiGpj::Types projType, std::string const& relPath = "");
   static void Open(std::string const& mapKeyName, std::string const& fileName,
                    std::map<std::string, cmGeneratedFileStream*>* fileMap);
+
 
   static std::string trimQuotes(std::string const& str);
   inline bool IsOSDirRelative() { return this->OSDirRelative; }
@@ -116,7 +120,7 @@ private:
     std::vector<cmsys::String>::const_iterator end,
     GhsMultiGpj::Types projType);
   static std::string GetFileNameFromPath(std::string const& path);
-  void UpdateBuildFiles(std::vector<cmGeneratorTarget*> tgts);
+  void UpdateBuildFiles(const std::vector<cmGeneratorTarget*>& tgts);
   bool IsTgtForBuild(const cmGeneratorTarget* tgt);
 
   std::vector<cmGeneratedFileStream*> TargetSubProjects;

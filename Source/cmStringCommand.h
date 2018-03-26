@@ -3,8 +3,9 @@
 #ifndef cmStringCommand_h
 #define cmStringCommand_h
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -22,14 +23,14 @@ public:
   /**
    * This is a virtual constructor for the command.
    */
-  cmCommand* Clone() CM_OVERRIDE { return new cmStringCommand; }
+  cmCommand* Clone() override { return new cmStringCommand; }
 
   /**
    * This is called when the command is first encountered in
    * the CMakeLists.txt file.
    */
   bool InitialPass(std::vector<std::string> const& args,
-                   cmExecutionStatus& status) CM_OVERRIDE;
+                   cmExecutionStatus& status) override;
 
 protected:
   bool HandleConfigureCommand(std::vector<std::string> const& args);
@@ -46,7 +47,9 @@ protected:
   bool HandleLengthCommand(std::vector<std::string> const& args);
   bool HandleSubstringCommand(std::vector<std::string> const& args);
   bool HandleAppendCommand(std::vector<std::string> const& args);
+  bool HandlePrependCommand(std::vector<std::string> const& args);
   bool HandleConcatCommand(std::vector<std::string> const& args);
+  bool HandleJoinCommand(std::vector<std::string> const& args);
   bool HandleStripCommand(std::vector<std::string> const& args);
   bool HandleRandomCommand(std::vector<std::string> const& args);
   bool HandleFindCommand(std::vector<std::string> const& args);
@@ -54,6 +57,9 @@ protected:
   bool HandleMakeCIdentifierCommand(std::vector<std::string> const& args);
   bool HandleGenexStripCommand(std::vector<std::string> const& args);
   bool HandleUuidCommand(std::vector<std::string> const& args);
+
+  bool joinImpl(std::vector<std::string> const& args, std::string const& glue,
+                size_t varIdx);
 
   class RegexReplacement
   {

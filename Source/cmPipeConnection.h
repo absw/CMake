@@ -1,13 +1,14 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
    file Copyright.txt or https://cmake.org/licensing for details.  */
-
 #pragma once
 
-#include "cmConnection.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cm_uv.h"
-
+#include "cmUVHandlePtr.h"
 #include <string>
+
+#include "cmConnection.h"
+#include "cm_uv.h"
 
 class cmPipeConnection : public cmEventBasedConnection
 {
@@ -23,6 +24,5 @@ public:
 
 private:
   const std::string PipeName;
-  uv_pipe_t* ServerPipe = nullptr;
-  uv_pipe_t* ClientPipe = nullptr;
+  cm::uv_pipe_ptr ServerPipe;
 };

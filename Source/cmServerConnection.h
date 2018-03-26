@@ -2,12 +2,13 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #pragma once
 
-#include "cmConnection.h"
-
-#include "cmPipeConnection.h"
-#include "cm_uv.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include <string>
+
+#include "cmConnection.h"
+#include "cmPipeConnection.h"
+#include "cmUVHandlePtr.h"
 
 class cmServerBase;
 
@@ -24,6 +25,7 @@ class cmServerBufferStrategy : public cmConnectionBufferStrategy
 {
 public:
   std::string BufferMessage(std::string& rawBuffer) override;
+  std::string BufferOutMessage(const std::string& rawBuffer) const override;
 
 private:
   std::string RequestBuffer;
@@ -44,16 +46,8 @@ public:
   bool OnServeStart(std::string* pString) override;
 
 private:
-  typedef union
-  {
-    uv_tty_t* tty;
-    uv_pipe_t* pipe;
-  } InOutUnion;
-
-  bool usesTty = false;
-
-  InOutUnion Input;
-  InOutUnion Output;
+  cm::uv_stream_ptr SetupStream(int file_id);
+  cm::uv_stream_ptr ReadStream;
 };
 
 /***

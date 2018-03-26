@@ -59,7 +59,17 @@
 # include <AvailabilityMacros.h>
 #endif
 
-#if defined(__ANDROID__)
+#if defined(CMAKE_BOOTSTRAP)
+# undef pthread_atfork
+# define pthread_atfork(prepare, parent, child) \
+     uv__pthread_atfork(prepare, parent, child)
+int uv__pthread_atfork(void (*prepare)(void), void (*parent)(void),
+                       void (*child)(void));
+# undef pthread_sigmask
+# define pthread_sigmask(how, set, oldset) \
+     uv__pthread_sigmask(how, set, oldset)
+int uv__pthread_sigmask(int how, const sigset_t* set, sigset_t* oset);
+#elif defined(__ANDROID__)
 int uv__pthread_sigmask(int how, const sigset_t* set, sigset_t* oset);
 # ifdef pthread_sigmask
 # undef pthread_sigmask
@@ -110,6 +120,12 @@ int uv__pthread_sigmask(int how, const sigset_t* set, sigset_t* oset);
 # define UV__POLLRDHUP 0x2000
 #endif
 
+#ifdef POLLPRI
+# define UV__POLLPRI POLLPRI
+#else
+# define UV__POLLPRI 0
+#endif
+
 #if !defined(O_CLOEXEC) && defined(__FreeBSD__)
 /*
  * It may be that we are just missing `__POSIX_VISIBLE >= 200809`.
@@ -145,6 +161,12 @@ enum {
   UV_LOOP_BLOCK_SIGPROF = 1
 };
 
+/* flags of excluding ifaddr */
+enum {
+  UV__EXCLUDE_IFPHYS,
+  UV__EXCLUDE_IFADDR
+};
+
 typedef enum {
   UV_CLOCK_PRECISE = 0,  /* Use the highest resolution clock available. */
   UV_CLOCK_FAST = 1      /* Use the fastest clock with <= 1ms granularity. */
@@ -163,7 +185,8 @@ struct uv__stream_queued_fds_s {
     defined(__FreeBSD__) || \
     defined(__FreeBSD_kernel__) || \
     defined(__linux__) || \
-    defined(__OpenBSD__)
+    defined(__OpenBSD__) || \
+    defined(__NetBSD__)
 #define uv__cloexec uv__cloexec_ioctl
 #define uv__nonblock uv__nonblock_ioctl
 #else
@@ -261,7 +284,7 @@ FILE* uv__open_file(const char* path);
 int uv__getpwuid_r(uv_passwd_t* pwd);
 
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(CMAKE_BOOTSTRAP)
 int uv___stream_fd(const uv_stream_t* handle);
 #define uv__stream_fd(handle) (uv___stream_fd((const uv_stream_t*) (handle)))
 #else

@@ -3,7 +3,7 @@
 #ifndef cmLocalNinjaGenerator_h
 #define cmLocalNinjaGenerator_h
 
-#include "cmConfigure.h"
+#include "cmConfigure.h" // IWYU pragma: keep
 
 #include <iosfwd>
 #include <map>
@@ -23,7 +23,6 @@ class cmGlobalGenerator;
 class cmGlobalNinjaGenerator;
 class cmMakefile;
 class cmRulePlaceholderExpander;
-class cmSourceFile;
 class cmake;
 
 /**
@@ -38,14 +37,14 @@ class cmLocalNinjaGenerator : public cmLocalCommonGenerator
 public:
   cmLocalNinjaGenerator(cmGlobalGenerator* gg, cmMakefile* mf);
 
-  ~cmLocalNinjaGenerator() CM_OVERRIDE;
+  ~cmLocalNinjaGenerator() override;
 
-  void Generate() CM_OVERRIDE;
+  void Generate() override;
 
-  cmRulePlaceholderExpander* CreateRulePlaceholderExpander() const CM_OVERRIDE;
+  cmRulePlaceholderExpander* CreateRulePlaceholderExpander() const override;
 
-  std::string GetTargetDirectory(cmGeneratorTarget const* target) const
-    CM_OVERRIDE;
+  std::string GetTargetDirectory(
+    cmGeneratorTarget const* target) const override;
 
   const cmGlobalNinjaGenerator* GetGlobalNinjaGenerator() const;
   cmGlobalNinjaGenerator* GetGlobalNinjaGenerator();
@@ -60,7 +59,10 @@ public:
     return this->HomeRelativeOutputPath;
   }
 
-  std::string BuildCommandLine(const std::vector<std::string>& cmdLines);
+  std::string BuildCommandLine(
+    std::vector<std::string> const& cmdLines,
+    std::string const& customStep = std::string(),
+    cmGeneratorTarget const* target = nullptr) const;
 
   void AppendTargetOutputs(cmGeneratorTarget* target, cmNinjaDeps& outputs);
   void AppendTargetDepends(
@@ -74,15 +76,11 @@ public:
   void AppendCustomCommandDeps(cmCustomCommandGenerator const& ccg,
                                cmNinjaDeps& ninjaDeps);
 
-  void ComputeObjectFilenames(
-    std::map<cmSourceFile const*, std::string>& mapping,
-    cmGeneratorTarget const* gt = CM_NULLPTR) CM_OVERRIDE;
-
 protected:
   std::string ConvertToIncludeReference(
     std::string const& path,
     cmOutputConverter::OutputFormat format = cmOutputConverter::SHELL,
-    bool forceFullPaths = false) CM_OVERRIDE;
+    bool forceFullPaths = false) override;
 
 private:
   cmGeneratedFileStream& GetBuildFileStream() const;
@@ -103,9 +101,13 @@ private:
 
   std::string MakeCustomLauncher(cmCustomCommandGenerator const& ccg);
 
+  std::string WriteCommandScript(std::vector<std::string> const& cmdLines,
+                                 std::string const& customStep,
+                                 cmGeneratorTarget const* target) const;
+
   std::string HomeRelativeOutputPath;
 
-  typedef std::map<cmCustomCommand const*, std::set<cmGeneratorTarget*> >
+  typedef std::map<cmCustomCommand const*, std::set<cmGeneratorTarget*>>
     CustomCommandTargetMap;
   CustomCommandTargetMap CustomCommandTargets;
   std::vector<cmCustomCommand const*> CustomCommands;

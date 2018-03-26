@@ -3,8 +3,15 @@ include(RunCMake)
 run_cmake(Append)
 run_cmake(AppendNoArgs)
 
+run_cmake(Prepend)
+run_cmake(PrependNoArgs)
+
 run_cmake(Concat)
 run_cmake(ConcatNoArgs)
+
+run_cmake(Join)
+run_cmake(JoinNoArgs)
+run_cmake(JoinNoVar)
 
 run_cmake(Timestamp)
 run_cmake(TimestampEmpty)

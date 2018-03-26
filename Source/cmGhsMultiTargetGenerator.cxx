@@ -13,7 +13,7 @@
 #include <assert.h>
 
 std::string const cmGhsMultiTargetGenerator::DDOption("-dynamic");
-
+#include <iostream>
 cmGhsMultiTargetGenerator::cmGhsMultiTargetGenerator(cmGeneratorTarget* target)
   : GeneratorTarget(target)
   , LocalGenerator(
@@ -24,7 +24,7 @@ cmGhsMultiTargetGenerator::cmGhsMultiTargetGenerator(cmGeneratorTarget* target)
 {
   this->RelBuildFilePath = this->GetRelBuildFilePath(target);
 
-  this->RelOutputFileName = this->RelBuildFilePath + target->GetName() + ".a";
+  this->RelOutputFileName = this->RelBuildFilePath + "lib" + target->GetName() + ".a";
 
   this->RelBuildFileName = this->RelBuildFilePath;
   this->RelBuildFileName += this->GetBuildFileName(target);
@@ -44,13 +44,24 @@ cmGhsMultiTargetGenerator::~cmGhsMultiTargetGenerator()
 std::string cmGhsMultiTargetGenerator::GetRelBuildFilePath(
   const cmGeneratorTarget* target)
 {
-  std::string output = target->GetEffectiveFolderName();
-  cmSystemTools::ConvertToUnixSlashes(output);
-  if (!output.empty()) {
-    output += "/";
-  }
-  output += target->GetName() + "/";
-  return output;
+    // Follow CMake File System structure for easy installation with CPACK.
+    std::string path = std::string(target->LocalGenerator->GetCurrentBinaryDirectory());
+    std::string binDir = std::string(target->GetLocalGenerator()->GetBinaryDirectory());
+    std::size_t found = path.find(binDir);
+    if (found != std::string::npos)
+    {
+        if (binDir.length() == path.length())
+        {
+            return "";
+        }
+        else
+        {
+            path = path.substr(binDir.length() + 1);
+        }
+    }
+
+    // Support for easy installation of files.
+    return path + "/";
 }
 
 std::string cmGhsMultiTargetGenerator::GetAbsPathToRoot(
@@ -199,7 +210,7 @@ void cmGhsMultiTargetGenerator::WriteTypeSpecifics(const std::string& config,
     std::string const static_library_suffix =
       this->Makefile->GetSafeDefinition("CMAKE_STATIC_LIBRARY_SUFFIX");
     *this->GetFolderBuildStreams() << "    -o \"" << outputDir
-                                   << outputFilename << static_library_suffix
+                                   << "lib" << outputFilename << static_library_suffix
                                    << "\"" << std::endl;
   } else if (this->GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE) {
     if (notKernel && !this->IsTargetGroup()) {
@@ -329,15 +340,6 @@ void cmGhsMultiTargetGenerator::WriteIncludes(const std::string& config,
 void cmGhsMultiTargetGenerator::WriteTargetLinkLibraries(
   std::string const& config, std::string const& language)
 {
-  // library directories
-  cmTargetDependSet tds =
-    this->GetGlobalGenerator()->GetTargetDirectDepends(this->GeneratorTarget);
-  for (cmTargetDependSet::iterator tdsI = tds.begin(); tdsI != tds.end();
-       ++tdsI) {
-    const cmGeneratorTarget* tg = *tdsI;
-    *this->GetFolderBuildStreams() << "    -L\"" << GetAbsBuildFilePath(tg)
-                                   << "\"" << std::endl;
-  }
   // library targets
   cmTarget::LinkLibraryVectorType llv =
     this->GeneratorTarget->Target->GetOriginalLinkLibraries();
@@ -345,10 +347,12 @@ void cmGhsMultiTargetGenerator::WriteTargetLinkLibraries(
        llvI != llv.end(); ++llvI) {
     std::string libName = llvI->first;
     // if it is a user defined target get the full path to the lib
-    cmTarget* tg(GetGlobalGenerator()->FindTarget(libName));
-    if (NULL != tg) {
-      libName = tg->GetName() + ".a";
+
+    cmGeneratorTarget* genTgt = this->LocalGenerator->FindGeneratorTargetToUse(libName);
+    if (NULL != genTgt) {
+      libName = this->GetAbsBuildFilePath(genTgt) + "lib" + genTgt->GetName() + ".a";
     }
+
     *this->GetFolderBuildStreams() << "    -l\"" << libName << "\""
                                    << std::endl;
   }
@@ -363,7 +367,7 @@ void cmGhsMultiTargetGenerator::WriteTargetLinkLibraries(
       this->GeneratorTarget->GetCreateRuleVariable(language, config);
     bool useWatcomQuote =
       this->Makefile->IsOn(createRule + "_USE_WATCOM_QUOTE");
-    CM_AUTO_PTR<cmLinkLineComputer> linkLineComputer(
+    std::unique_ptr<cmLinkLineComputer> linkLineComputer(
       this->GetGlobalGenerator()->CreateLinkLineComputer(
         this->LocalGenerator,
         this->LocalGenerator->GetStateSnapshot().GetDirectory()));
@@ -439,7 +443,7 @@ cmGhsMultiTargetGenerator::GetObjectNames(
   cmLocalGhsMultiGenerator* const localGhsMultiGenerator,
   cmGeneratorTarget* const generatorTarget)
 {
-  std::map<std::string, std::vector<cmSourceFile*> > filenameToSource;
+  std::map<std::string, std::vector<cmSourceFile*>> filenameToSource;
   std::map<cmSourceFile*, std::string> sourceToFilename;
   for (std::vector<cmSourceFile*>::const_iterator sf = objectSources->begin();
        sf != objectSources->end(); ++sf) {
@@ -451,7 +455,7 @@ cmGhsMultiTargetGenerator::GetObjectNames(
   }
 
   std::vector<cmSourceFile*> duplicateSources;
-  for (std::map<std::string, std::vector<cmSourceFile*> >::const_iterator
+  for (std::map<std::string, std::vector<cmSourceFile*>>::const_iterator
          msvSourceI = filenameToSource.begin();
        msvSourceI != filenameToSource.end(); ++msvSourceI) {
     if (msvSourceI->second.size() > 1) {
@@ -486,14 +490,14 @@ void cmGhsMultiTargetGenerator::WriteSources(
   for (std::vector<cmSourceFile*>::const_iterator si = objectSources.begin();
        si != objectSources.end(); ++si) {
     std::vector<cmSourceGroup> sourceGroups(this->Makefile->GetSourceGroups());
-    char const* sourceFullPath = (*si)->GetFullPath().c_str();
+    std::string const& sourceFullPath = (*si)->GetFullPath();
     cmSourceGroup* sourceGroup =
       this->Makefile->FindSourceGroup(sourceFullPath, sourceGroups);
-    std::string sgPath(sourceGroup->GetFullName());
+    std::string sgPath = sourceGroup->GetFullName();
     cmSystemTools::ConvertToUnixSlashes(sgPath);
     cmGlobalGhsMultiGenerator::AddFilesUpToPath(
       this->GetFolderBuildStreams(), &this->FolderBuildStreams,
-      this->LocalGenerator->GetBinaryDirectory(), sgPath,
+      this->LocalGenerator->GetBinaryDirectory().c_str(), sgPath,
       GhsMultiGpj::SUBPROJECT, this->RelBuildFilePath);
 
     std::string fullSourcePath((*si)->GetFullPath());
@@ -604,11 +608,11 @@ std::string cmGhsMultiTargetGenerator::ComputeLongestObjectDirectory(
   dir_max += "/";
   std::vector<cmSourceGroup> sourceGroups(
     localGhsMultiGenerator->GetMakefile()->GetSourceGroups());
-  char const* const sourceFullPath = sourceFile->GetFullPath().c_str();
+  std::string const& sourceFullPath = sourceFile->GetFullPath();
   cmSourceGroup* sourceGroup =
     localGhsMultiGenerator->GetMakefile()->FindSourceGroup(sourceFullPath,
                                                            sourceGroups);
-  std::string const sgPath(sourceGroup->GetFullName());
+  std::string const& sgPath = sourceGroup->GetFullName();
   dir_max += sgPath;
   dir_max += "/Objs/libs/";
   dir_max += generatorTarget->Target->GetName();

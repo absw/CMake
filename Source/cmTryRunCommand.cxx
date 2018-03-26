@@ -4,8 +4,8 @@
 
 #include "cmsys/FStream.hxx"
 #include <stdio.h>
-#include <string.h>
 
+#include "cmDuration.h"
 #include "cmMakefile.h"
 #include "cmState.h"
 #include "cmStateTypes.h"
@@ -33,11 +33,11 @@ bool cmTryRunCommand::InitialPass(std::vector<std::string> const& argv,
   // build an arg list for TryCompile and extract the runArgs,
   std::vector<std::string> tryCompile;
 
-  this->CompileResultVariable = "";
-  this->RunResultVariable = "";
-  this->OutputVariable = "";
-  this->RunOutputVariable = "";
-  this->CompileOutputVariable = "";
+  this->CompileResultVariable.clear();
+  this->RunResultVariable.clear();
+  this->OutputVariable.clear();
+  this->RunOutputVariable.clear();
+  this->CompileOutputVariable.clear();
 
   std::string runArgs;
   unsigned int i;
@@ -125,9 +125,8 @@ bool cmTryRunCommand::InitialPass(std::vector<std::string> const& argv,
       std::string runOutputContents;
       if (this->Makefile->IsOn("CMAKE_CROSSCOMPILING") &&
           !this->Makefile->IsDefinitionSet("CMAKE_CROSSCOMPILING_EMULATOR")) {
-        this->DoNotRunExecutable(runArgs, argv[3], captureRunOutput
-                                   ? &runOutputContents
-                                   : CM_NULLPTR);
+        this->DoNotRunExecutable(
+          runArgs, argv[3], captureRunOutput ? &runOutputContents : nullptr);
       } else {
         this->RunExecutable(runArgs, &runOutputContents);
       }
@@ -154,7 +153,7 @@ bool cmTryRunCommand::InitialPass(std::vector<std::string> const& argv,
 
   // if we created a directory etc, then cleanup after ourselves
   if (!this->Makefile->GetCMakeInstance()->GetDebugTryCompile()) {
-    this->CleanupFiles(this->BinaryDirectory.c_str());
+    this->CleanupFiles(this->BinaryDirectory);
   }
   return true;
 }
@@ -187,18 +186,19 @@ void cmTryRunCommand::RunExecutable(const std::string& runArgs,
   if (!runArgs.empty()) {
     finalCommand += runArgs;
   }
-  int timeout = 0;
   bool worked = cmSystemTools::RunSingleCommand(
-    finalCommand.c_str(), out, out, &retVal, CM_NULLPTR,
-    cmSystemTools::OUTPUT_NONE, timeout);
+    finalCommand.c_str(), out, out, &retVal, nullptr,
+    cmSystemTools::OUTPUT_NONE, cmDuration::zero());
   // set the run var
-  char retChar[1000];
+  char retChar[16];
+  const char* retStr;
   if (worked) {
     sprintf(retChar, "%i", retVal);
+    retStr = retChar;
   } else {
-    strcpy(retChar, "FAILED_TO_RUN");
+    retStr = "FAILED_TO_RUN";
   }
-  this->Makefile->AddCacheDefinition(this->RunResultVariable, retChar,
+  this->Makefile->AddCacheDefinition(this->RunResultVariable, retStr,
                                      "Result of TRY_RUN",
                                      cmStateEnums::INTERNAL);
 }
@@ -233,7 +233,7 @@ void cmTryRunCommand::DoNotRunExecutable(const std::string& runArgs,
     this->RunResultVariable + "__TRYRUN_OUTPUT";
   bool error = false;
 
-  if (this->Makefile->GetDefinition(this->RunResultVariable) == CM_NULLPTR) {
+  if (this->Makefile->GetDefinition(this->RunResultVariable) == nullptr) {
     // if the variables doesn't exist, create it with a helpful error text
     // and mark it as advanced
     std::string comment;
@@ -255,8 +255,8 @@ void cmTryRunCommand::DoNotRunExecutable(const std::string& runArgs,
   }
 
   // is the output from the executable used ?
-  if (out != CM_NULLPTR) {
-    if (this->Makefile->GetDefinition(internalRunOutputName) == CM_NULLPTR) {
+  if (out != nullptr) {
+    if (this->Makefile->GetDefinition(internalRunOutputName) == nullptr) {
       // if the variables doesn't exist, create it with a helpful error text
       // and mark it as advanced
       std::string comment;
@@ -304,7 +304,7 @@ void cmTryRunCommand::DoNotRunExecutable(const std::string& runArgs,
       comment += " to\n"
                  "   the exit code (in many cases 0 for success), otherwise "
                  "enter \"FAILED_TO_RUN\".\n";
-      if (out != CM_NULLPTR) {
+      if (out != nullptr) {
         comment += internalRunOutputName;
         comment +=
           "\n   contains the text the executable "
@@ -335,7 +335,7 @@ void cmTryRunCommand::DoNotRunExecutable(const std::string& runArgs,
            << this->Makefile->GetDefinition(this->RunResultVariable)
            << "\"\n     CACHE STRING \"Result from TRY_RUN\" FORCE)\n\n";
 
-      if (out != CM_NULLPTR) {
+      if (out != nullptr) {
         file << "set( " << internalRunOutputName << " \n     \""
              << this->Makefile->GetDefinition(internalRunOutputName)
              << "\"\n     CACHE STRING \"Output from TRY_RUN\" FORCE)\n\n";
@@ -348,7 +348,7 @@ void cmTryRunCommand::DoNotRunExecutable(const std::string& runArgs,
                                "please set the following cache variables "
                                "appropriately:\n";
     errorMessage += "   " + this->RunResultVariable + " (advanced)\n";
-    if (out != CM_NULLPTR) {
+    if (out != nullptr) {
       errorMessage += "   " + internalRunOutputName + " (advanced)\n";
     }
     errorMessage += detailsString;
@@ -356,7 +356,7 @@ void cmTryRunCommand::DoNotRunExecutable(const std::string& runArgs,
     return;
   }
 
-  if (out != CM_NULLPTR) {
+  if (out != nullptr) {
     (*out) = this->Makefile->GetDefinition(internalRunOutputName);
   }
 }

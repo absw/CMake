@@ -1,6 +1,10 @@
 static cmVS7FlagTable cmVS141CLFlagTable[] = {
 
   // Enum Properties
+  { "DiagnosticsFormat", "diagnostics:classic", "Classic", "Classic", 0 },
+  { "DiagnosticsFormat", "diagnostics:column", "Column", "Column", 0 },
+  { "DiagnosticsFormat", "diagnostics:caret", "Caret", "Caret", 0 },
+
   { "DebugInformationFormat", "", "None", "None", 0 },
   { "DebugInformationFormat", "Z7", "C7 compatible", "OldStyle", 0 },
   { "DebugInformationFormat", "Zi", "Program Database", "ProgramDatabase", 0 },
@@ -79,6 +83,7 @@ static cmVS7FlagTable cmVS141CLFlagTable[] = {
   { "FloatingPointModel", "fp:strict", "Strict", "Strict", 0 },
   { "FloatingPointModel", "fp:fast", "Fast", "Fast", 0 },
 
+  { "LanguageStandard", "std:c++17", "ISO C++17 Standard", "stdcpp17", 0 },
   { "LanguageStandard", "std:c++14", "ISO C++14 Standard", "stdcpp14", 0 },
   { "LanguageStandard", "std:c++latest", "ISO C++ Latest Draft Standard",
     "stdcpplatest", 0 },

@@ -9,6 +9,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -19,7 +20,6 @@
 #include "cmPropertyMap.h"
 #include "cmStateTypes.h"
 #include "cmTargetLinkLibraryType.h"
-#include "cm_unordered_map.hxx"
 
 class cmGlobalGenerator;
 class cmMakefile;
@@ -180,11 +180,17 @@ public:
   bool GetHaveInstallRule() const { return this->HaveInstallRule; }
   void SetHaveInstallRule(bool h) { this->HaveInstallRule = h; }
 
+  /**
+  * Get/Set whether this target was auto-created by a generator.
+  */
+  bool GetIsGeneratorProvided() const { return this->IsGeneratorProvided; }
+  void SetIsGeneratorProvided(bool igp) { this->IsGeneratorProvided = igp; }
+
   /** Add a utility on which this project depends. A utility is an executable
    * name as would be specified to the ADD_EXECUTABLE or UTILITY_SOURCE
    * commands. It is not a full path nor does it have an extension.
    */
-  void AddUtility(const std::string& u, cmMakefile* makefile = CM_NULLPTR);
+  void AddUtility(const std::string& u, cmMakefile* makefile = nullptr);
   ///! Get the utilities used by this target
   std::set<std::string> const& GetUtilities() const { return this->Utilities; }
   cmListFileBacktrace const* GetUtilityBacktrace(const std::string& u) const;
@@ -284,6 +290,7 @@ private:
                             std::string const& value) const;
 
 private:
+  bool IsGeneratorProvided;
   cmPropertyMap Properties;
   std::set<std::string> SystemIncludeDirectories;
   std::set<std::string> LinkDirectoriesEmmitted;
@@ -297,7 +304,7 @@ private:
   std::vector<cmCustomCommand> PreBuildCommands;
   std::vector<cmCustomCommand> PreLinkCommands;
   std::vector<cmCustomCommand> PostBuildCommands;
-  std::vector<std::pair<TLLSignature, cmListFileContext> > TLLCommands;
+  std::vector<std::pair<TLLSignature, cmListFileContext>> TLLCommands;
   LinkLibraryVectorType OriginalLinkLibraries;
   cmMakefile* Makefile;
   cmTargetInternalPointer Internal;
@@ -323,7 +330,7 @@ private:
   cmListFileBacktrace Backtrace;
 };
 
-typedef CM_UNORDERED_MAP<std::string, cmTarget> cmTargets;
+typedef std::unordered_map<std::string, cmTarget> cmTargets;
 
 class cmTargetSet : public std::set<std::string>
 {

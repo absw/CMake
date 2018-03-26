@@ -12,18 +12,17 @@
 #include "cmSystemTools.h"
 #include "cmake.h"
 
-cmSourceFile::cmSourceFile(cmMakefile* mf, const std::string& name)
-  : Location(mf, name)
+cmSourceFile::cmSourceFile(cmMakefile* mf, const std::string& name,
+                           cmSourceFileLocationKind kind)
+  : Location(mf, name, kind)
 {
-  this->CustomCommand = CM_NULLPTR;
+  this->CustomCommand = nullptr;
   this->FindFullPathFailed = false;
-  this->IsUiFile = (".ui" == cmSystemTools::GetFilenameLastExtension(
-                               this->Location.GetName()));
 }
 
 cmSourceFile::~cmSourceFile()
 {
-  this->SetCustomCommand(CM_NULLPTR);
+  this->SetCustomCommand(nullptr);
 }
 
 std::string const& cmSourceFile::GetExtension() const
@@ -112,7 +111,7 @@ std::string const& cmSourceFile::GetFullPath() const
 
 bool cmSourceFile::FindFullPath(std::string* error)
 {
-  // If thie method has already failed once do not try again.
+  // If this method has already failed once do not try again.
   if (this->FindFullPathFailed) {
     return false;
   }
@@ -131,17 +130,17 @@ bool cmSourceFile::FindFullPath(std::string* error)
 
   // The file is not generated.  It must exist on disk.
   cmMakefile const* mf = this->Location.GetMakefile();
-  const char* tryDirs[3] = { CM_NULLPTR, CM_NULLPTR, CM_NULLPTR };
+  const char* tryDirs[3] = { nullptr, nullptr, nullptr };
   if (this->Location.DirectoryIsAmbiguous()) {
     tryDirs[0] = mf->GetCurrentSourceDirectory();
     tryDirs[1] = mf->GetCurrentBinaryDirectory();
   } else {
     tryDirs[0] = "";
   }
-  const std::vector<std::string>& srcExts =
-    mf->GetCMakeInstance()->GetSourceExtensions();
-  std::vector<std::string> hdrExts =
-    mf->GetCMakeInstance()->GetHeaderExtensions();
+
+  cmake const* const cmakeInst = mf->GetCMakeInstance();
+  std::vector<std::string> const& srcExts = cmakeInst->GetSourceExtensions();
+  std::vector<std::string> const& hdrExts = cmakeInst->GetHeaderExtensions();
   for (const char* const* di = tryDirs; *di; ++di) {
     std::string tryPath = this->Location.GetDirectory();
     if (!tryPath.empty()) {
@@ -152,15 +151,13 @@ bool cmSourceFile::FindFullPath(std::string* error)
     if (this->TryFullPath(tryPath, "")) {
       return true;
     }
-    for (std::vector<std::string>::const_iterator ei = srcExts.begin();
-         ei != srcExts.end(); ++ei) {
-      if (this->TryFullPath(tryPath, *ei)) {
+    for (std::string const& ext : srcExts) {
+      if (this->TryFullPath(tryPath, ext)) {
         return true;
       }
     }
-    for (std::vector<std::string>::const_iterator ei = hdrExts.begin();
-         ei != hdrExts.end(); ++ei) {
-      if (this->TryFullPath(tryPath, *ei)) {
+    for (std::string const& ext : hdrExts) {
+      if (this->TryFullPath(tryPath, ext)) {
         return true;
       }
     }
@@ -173,13 +170,11 @@ bool cmSourceFile::FindFullPath(std::string* error)
   }
   missing += this->Location.GetName();
   e << "Cannot find source file:\n  " << missing << "\nTried extensions";
-  for (std::vector<std::string>::const_iterator ext = srcExts.begin();
-       ext != srcExts.end(); ++ext) {
-    e << " ." << *ext;
+  for (std::string const& srcExt : srcExts) {
+    e << " ." << srcExt;
   }
-  for (std::vector<std::string>::const_iterator ext = hdrExts.begin();
-       ext != hdrExts.end(); ++ext) {
-    e << " ." << *ext;
+  for (std::string const& ext : hdrExts) {
+    e << " ." << ext;
   }
   if (error) {
     *error = e.str();
@@ -197,7 +192,7 @@ bool cmSourceFile::TryFullPath(const std::string& path, const std::string& ext)
     tryPath += ".";
     tryPath += ext;
   }
-  if (cmSystemTools::FileExists(tryPath.c_str())) {
+  if (cmSystemTools::FileExists(tryPath)) {
     this->FullPath = tryPath;
     return true;
   }
@@ -245,13 +240,6 @@ bool cmSourceFile::Matches(cmSourceFileLocation const& loc)
 void cmSourceFile::SetProperty(const std::string& prop, const char* value)
 {
   this->Properties.SetProperty(prop, value);
-
-  if (this->IsUiFile) {
-    cmMakefile const* mf = this->Location.GetMakefile();
-    if (prop == "AUTOUIC_OPTIONS") {
-      const_cast<cmMakefile*>(mf)->AddQtUiFileWithOptions(this);
-    }
-  }
 }
 
 void cmSourceFile::AppendProperty(const std::string& prop, const char* value,
@@ -290,7 +278,7 @@ const char* cmSourceFile::GetProperty(const std::string& prop) const
   // Check for computed properties.
   if (prop == "LOCATION") {
     if (this->FullPath.empty()) {
-      return CM_NULLPTR;
+      return nullptr;
     }
     return this->FullPath.c_str();
   }

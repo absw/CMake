@@ -17,7 +17,12 @@ public:
   virtual void CharacterDataHandler(const char* data, int length)
   {
     if (this->DoGUID) {
-      this->GUID.assign(data + 1, length - 2);
+      if (data[0] == '{') {
+        // remove surrounding curly brackets
+        this->GUID.assign(data + 1, length - 2);
+      } else {
+        this->GUID.assign(data, length);
+      }
       this->DoGUID = false;
     }
   }
@@ -59,20 +64,18 @@ cmLocalVisualStudio10Generator::~cmLocalVisualStudio10Generator()
 
 void cmLocalVisualStudio10Generator::Generate()
 {
-
-  std::vector<cmGeneratorTarget*> tgts = this->GetGeneratorTargets();
-  for (std::vector<cmGeneratorTarget*>::iterator l = tgts.begin();
-       l != tgts.end(); ++l) {
-    if ((*l)->GetType() == cmStateEnums::INTERFACE_LIBRARY) {
+  const std::vector<cmGeneratorTarget*>& tgts = this->GetGeneratorTargets();
+  for (cmGeneratorTarget* l : tgts) {
+    if (l->GetType() == cmStateEnums::INTERFACE_LIBRARY) {
       continue;
     }
     if (static_cast<cmGlobalVisualStudioGenerator*>(this->GlobalGenerator)
-          ->TargetIsFortranOnly(*l)) {
-      this->CreateSingleVCProj((*l)->GetName().c_str(), *l);
+          ->TargetIsFortranOnly(l)) {
+      this->CreateSingleVCProj(l->GetName(), l);
     } else {
       cmVisualStudio10TargetGenerator tg(
-        *l, static_cast<cmGlobalVisualStudio10Generator*>(
-              this->GetGlobalGenerator()));
+        l, static_cast<cmGlobalVisualStudio10Generator*>(
+             this->GetGlobalGenerator()));
       tg.Generate();
     }
   }

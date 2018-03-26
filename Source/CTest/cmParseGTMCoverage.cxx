@@ -93,7 +93,7 @@ bool cmParseGTMCoverage::ReadMCovFile(const char* file)
         // This section accounts for lines that were previously marked
         // as non-executable code (-1), if the parser comes back with
         // a non-zero count, increase the count by 1 to push the line
-        // into the executable code set in addtion to the count found.
+        // into the executable code set in addition to the count found.
         if (coverageVector[lineoffset + linenumber] == -1 && count > 0) {
           coverageVector[lineoffset + linenumber] += count + 1;
         } else {
@@ -182,7 +182,7 @@ bool cmParseGTMCoverage::ParseMCOVLine(std::string const& line,
       // save the argument into the argument vector
       args.push_back(arg);
       // start on a new argument
-      arg = "";
+      arg.clear();
       // if we are at the end of the ), then finish while loop
       if (cur == ')') {
         done = true;
@@ -233,8 +233,8 @@ bool cmParseGTMCoverage::ParseMCOVLine(std::string const& line,
     // To avoid double counting of line 0 of each entry point,
     // Don't count the lines that do not give an explicit line
     // number.
-    routine = "";
-    function = "";
+    routine.clear();
+    function.clear();
   } else {
     // this is the format for this line
     // ^COVERAGE("%RSEL","SRC",count)

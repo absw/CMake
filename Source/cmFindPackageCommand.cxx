@@ -13,6 +13,7 @@
 #include <deque>
 #include <functional>
 #include <iterator>
+#include <memory> // IWYU pragma: keep
 #include <sstream>
 #include <stdio.h>
 #include <string.h>
@@ -24,7 +25,6 @@
 #include "cmState.h"
 #include "cmStateTypes.h"
 #include "cmVersion.h"
-#include "cm_auto_ptr.hxx"
 #include "cmake.h"
 
 #if defined(__HAIKU__)
@@ -209,6 +209,8 @@ bool cmFindPackageCommand::InitialPass(std::vector<std::string> const& args,
     this->SortDirection = strcmp(sd, "ASC") == 0 ? Asc : Dec;
   }
 
+  this->SelectDefaultNoPackageRootPath();
+
   // Find the current root path mode.
   this->SelectDefaultRootPathMode();
 
@@ -223,7 +225,7 @@ bool cmFindPackageCommand::InitialPass(std::vector<std::string> const& args,
   std::set<std::string> optionalComponents;
 
   // Always search directly in a generated path.
-  this->SearchPathSuffixes.push_back("");
+  this->SearchPathSuffixes.emplace_back();
 
   // Parse the arguments.
   enum Doing
@@ -365,14 +367,12 @@ bool cmFindPackageCommand::InitialPass(std::vector<std::string> const& args,
   if (!this->UseFindModules && !this->UseConfigFiles) {
     std::ostringstream e;
     e << "given options exclusive to Module mode:\n";
-    for (std::set<unsigned int>::const_iterator si = moduleArgs.begin();
-         si != moduleArgs.end(); ++si) {
-      e << "  " << args[*si] << "\n";
+    for (unsigned int si : moduleArgs) {
+      e << "  " << args[si] << "\n";
     }
     e << "and options exclusive to Config mode:\n";
-    for (std::set<unsigned int>::const_iterator si = configArgs.begin();
-         si != configArgs.end(); ++si) {
-      e << "  " << args[*si] << "\n";
+    for (unsigned int si : configArgs) {
+      e << "  " << args[si] << "\n";
     }
     e << "The options are incompatible.";
     this->SetError(e.str());
@@ -516,15 +516,14 @@ bool cmFindPackageCommand::InitialPass(std::vector<std::string> const& args,
 
   // Add the default configs.
   if (this->Configs.empty()) {
-    for (std::vector<std::string>::const_iterator ni = this->Names.begin();
-         ni != this->Names.end(); ++ni) {
-      std::string config = *ni;
+    for (std::string const& n : this->Names) {
+      std::string config = n;
       config += "Config.cmake";
       this->Configs.push_back(config);
 
-      config = cmSystemTools::LowerCase(*ni);
+      config = cmSystemTools::LowerCase(n);
       config += "-config.cmake";
-      this->Configs.push_back(config);
+      this->Configs.push_back(std::move(config));
     }
   }
 
@@ -591,7 +590,7 @@ void cmFindPackageCommand::SetModuleVariables(const std::string& components)
     this->AddFindDefinition(exact, this->VersionExact ? "1" : "0");
   }
 
-  // Push on to the pacakge stack
+  // Push on to the package stack
   this->Makefile->FindPackageModuleStack.push_back(this->Name);
 }
 
@@ -609,14 +608,12 @@ void cmFindPackageCommand::AddFindDefinition(const std::string& var,
 
 void cmFindPackageCommand::RestoreFindDefinitions()
 {
-  for (std::map<std::string, OriginalDef>::iterator i =
-         this->OriginalDefs.begin();
-       i != this->OriginalDefs.end(); ++i) {
-    OriginalDef const& od = i->second;
+  for (auto const& i : this->OriginalDefs) {
+    OriginalDef const& od = i.second;
     if (od.exists) {
-      this->Makefile->AddDefinition(i->first, od.value.c_str());
+      this->Makefile->AddDefinition(i.first, od.value.c_str());
     } else {
-      this->Makefile->RemoveDefinition(i->first);
+      this->Makefile->RemoveDefinition(i.first);
     }
   }
 }
@@ -663,7 +660,7 @@ bool cmFindPackageCommand::HandlePackageMode()
       cmSystemTools::ConvertToUnixSlashes(dir);
 
       // Treat relative paths with respect to the current source dir.
-      if (!cmSystemTools::FileIsFullPath(dir.c_str())) {
+      if (!cmSystemTools::FileIsFullPath(dir)) {
         dir = "/" + dir;
         dir = this->Makefile->GetCurrentSourceDirectory() + dir;
       }
@@ -872,13 +869,11 @@ bool cmFindPackageCommand::HandlePackageMode()
   std::string consideredVersions;
 
   const char* sep = "";
-  for (std::vector<ConfigFileInfo>::const_iterator i =
-         this->ConsideredConfigs.begin();
-       i != this->ConsideredConfigs.end(); ++i) {
+  for (ConfigFileInfo const& i : this->ConsideredConfigs) {
     consideredConfigFiles += sep;
     consideredVersions += sep;
-    consideredConfigFiles += i->filename;
-    consideredVersions += i->version;
+    consideredConfigFiles += i.filename;
+    consideredVersions += i.version;
     sep = ";";
   }
 
@@ -944,9 +939,8 @@ bool cmFindPackageCommand::FindConfig()
 bool cmFindPackageCommand::FindPrefixedConfig()
 {
   std::vector<std::string> const& prefixes = this->SearchPaths;
-  for (std::vector<std::string>::const_iterator pi = prefixes.begin();
-       pi != prefixes.end(); ++pi) {
-    if (this->SearchPrefix(*pi)) {
+  for (std::string const& p : prefixes) {
+    if (this->SearchPrefix(p)) {
       return true;
     }
   }
@@ -956,9 +950,8 @@ bool cmFindPackageCommand::FindPrefixedConfig()
 bool cmFindPackageCommand::FindFrameworkConfig()
 {
   std::vector<std::string> const& prefixes = this->SearchPaths;
-  for (std::vector<std::string>::const_iterator i = prefixes.begin();
-       i != prefixes.end(); ++i) {
-    if (this->SearchFrameworkPrefix(*i)) {
+  for (std::string const& p : prefixes) {
+    if (this->SearchFrameworkPrefix(p)) {
       return true;
     }
   }
@@ -968,9 +961,8 @@ bool cmFindPackageCommand::FindFrameworkConfig()
 bool cmFindPackageCommand::FindAppBundleConfig()
 {
   std::vector<std::string> const& prefixes = this->SearchPaths;
-  for (std::vector<std::string>::const_iterator i = prefixes.begin();
-       i != prefixes.end(); ++i) {
-    if (this->SearchAppBundlePrefix(*i)) {
+  for (std::string const& p : prefixes) {
+    if (this->SearchAppBundlePrefix(p)) {
       return true;
     }
   }
@@ -1090,6 +1082,9 @@ void cmFindPackageCommand::AppendSuccessInformation()
 void cmFindPackageCommand::ComputePrefixes()
 {
   if (!this->NoDefaultPath) {
+    if (!this->NoPackageRootPath) {
+      this->FillPrefixesPackageRoot();
+    }
     if (!this->NoCMakePath) {
       this->FillPrefixesCMakeVariable();
     }
@@ -1115,6 +1110,23 @@ void cmFindPackageCommand::ComputePrefixes()
   this->FillPrefixesUserGuess();
 
   this->ComputeFinalPaths();
+}
+
+void cmFindPackageCommand::FillPrefixesPackageRoot()
+{
+  cmSearchPath& paths = this->LabeledPaths[PathLabel::PackageRoot];
+
+  // Add package specific search prefixes
+  // NOTE: This should be using const_reverse_iterator but HP aCC and
+  //       Oracle sunCC both currently have standard library issues
+  //       with the reverse iterator APIs.
+  for (std::deque<std::string>::reverse_iterator pkg =
+         this->Makefile->FindPackageModuleStack.rbegin();
+       pkg != this->Makefile->FindPackageModuleStack.rend(); ++pkg) {
+    std::string varName = *pkg + "_ROOT";
+    paths.AddCMakePath(varName);
+    paths.AddEnvPath(varName);
+  }
 }
 
 void cmFindPackageCommand::FillPrefixesCMakeEnvironment()
@@ -1149,14 +1161,12 @@ void cmFindPackageCommand::FillPrefixesSystemEnvironment()
   // working directory.
   std::vector<std::string> tmp;
   cmSystemTools::GetPath(tmp);
-  for (std::vector<std::string>::iterator i = tmp.begin(); i != tmp.end();
-       ++i) {
+  for (std::string const& i : tmp) {
     // If the path is a PREFIX/bin case then add its parent instead.
-    if ((cmHasLiteralSuffix(*i, "/bin")) ||
-        (cmHasLiteralSuffix(*i, "/sbin"))) {
-      paths.AddPath(cmSystemTools::GetFilenamePath(*i));
+    if ((cmHasLiteralSuffix(i, "/bin")) || (cmHasLiteralSuffix(i, "/sbin"))) {
+      paths.AddPath(cmSystemTools::GetFilenamePath(i));
     } else {
-      paths.AddPath(*i);
+      paths.AddPath(i);
     }
   }
 }
@@ -1274,9 +1284,8 @@ void cmFindPackageCommand::LoadPackageRegistryWin(bool user, unsigned int view,
   if (user && !bad.empty() &&
       RegOpenKeyExW(HKEY_CURRENT_USER, key.c_str(), 0, KEY_SET_VALUE | view,
                     &hKey) == ERROR_SUCCESS) {
-    for (std::set<std::wstring>::const_iterator vi = bad.begin();
-         vi != bad.end(); ++vi) {
-      RegDeleteValueW(hKey, vi->c_str());
+    for (std::wstring const& v : bad) {
+      RegDeleteValueW(hKey, v.c_str());
     }
     RegCloseKey(hKey);
   }
@@ -1297,7 +1306,7 @@ public:
       cmSystemTools::RemoveFile(this->File);
     }
   }
-  void Release() { this->File = CM_NULLPTR; }
+  void Release() { this->File = nullptr; }
 };
 
 void cmFindPackageCommand::LoadPackageRegistryDir(std::string const& dir,
@@ -1337,10 +1346,10 @@ bool cmFindPackageCommand::CheckPackageRegistryEntry(const std::string& fname,
                                                      cmSearchPath& outPaths)
 {
   // Parse the content of one package registry entry.
-  if (cmSystemTools::FileIsFullPath(fname.c_str())) {
+  if (cmSystemTools::FileIsFullPath(fname)) {
     // The first line in the stream is the full path to a file or
     // directory containing the package.
-    if (cmSystemTools::FileExists(fname.c_str())) {
+    if (cmSystemTools::FileExists(fname)) {
       // The path exists.  Look for the package here.
       if (!cmSystemTools::FileIsDirectory(fname)) {
         outPaths.AddPath(cmSystemTools::GetFilenamePath(fname));
@@ -1373,10 +1382,8 @@ void cmFindPackageCommand::FillPrefixesUserGuess()
 {
   cmSearchPath& paths = this->LabeledPaths[PathLabel::Guess];
 
-  for (std::vector<std::string>::const_iterator p =
-         this->UserGuessArgs.begin();
-       p != this->UserGuessArgs.end(); ++p) {
-    paths.AddUserPath(*p);
+  for (std::string const& p : this->UserGuessArgs) {
+    paths.AddUserPath(p);
   }
 }
 
@@ -1384,10 +1391,8 @@ void cmFindPackageCommand::FillPrefixesUserHints()
 {
   cmSearchPath& paths = this->LabeledPaths[PathLabel::Hints];
 
-  for (std::vector<std::string>::const_iterator p =
-         this->UserHintsArgs.begin();
-       p != this->UserHintsArgs.end(); ++p) {
-    paths.AddUserPath(*p);
+  for (std::string const& p : this->UserHintsArgs) {
+    paths.AddUserPath(p);
   }
 }
 
@@ -1396,12 +1401,10 @@ bool cmFindPackageCommand::SearchDirectory(std::string const& dir)
   assert(!dir.empty() && dir[dir.size() - 1] == '/');
 
   // Check each path suffix on this directory.
-  for (std::vector<std::string>::const_iterator si =
-         this->SearchPathSuffixes.begin();
-       si != this->SearchPathSuffixes.end(); ++si) {
+  for (std::string const& s : this->SearchPathSuffixes) {
     std::string d = dir;
-    if (!si->empty()) {
-      d += *si;
+    if (!s.empty()) {
+      d += s;
       d += "/";
     }
     if (this->CheckDirectory(d)) {
@@ -1432,16 +1435,14 @@ bool cmFindPackageCommand::FindConfigFile(std::string const& dir,
     return false;
   }
 
-  for (std::vector<std::string>::const_iterator ci = this->Configs.begin();
-       ci != this->Configs.end(); ++ci) {
+  for (std::string const& c : this->Configs) {
     file = dir;
     file += "/";
-    file += *ci;
+    file += c;
     if (this->DebugMode) {
       fprintf(stderr, "Checking file [%s]\n", file.c_str());
     }
-    if (cmSystemTools::FileExists(file.c_str(), true) &&
-        this->CheckVersion(file)) {
+    if (cmSystemTools::FileExists(file, true) && this->CheckVersion(file)) {
       return true;
     }
   }
@@ -1461,7 +1462,7 @@ bool cmFindPackageCommand::CheckVersion(std::string const& config_file)
   // Look for foo-config-version.cmake
   std::string version_file = version_file_base;
   version_file += "-version.cmake";
-  if (!haveResult && cmSystemTools::FileExists(version_file.c_str(), true)) {
+  if (!haveResult && cmSystemTools::FileExists(version_file, true)) {
     result = this->CheckVersionFile(version_file, version);
     haveResult = true;
   }
@@ -1469,7 +1470,7 @@ bool cmFindPackageCommand::CheckVersion(std::string const& config_file)
   // Look for fooConfigVersion.cmake
   version_file = version_file_base;
   version_file += "Version.cmake";
-  if (!haveResult && cmSystemTools::FileExists(version_file.c_str(), true)) {
+  if (!haveResult && cmSystemTools::FileExists(version_file, true)) {
     result = this->CheckVersionFile(version_file, version);
     haveResult = true;
   }
@@ -1482,7 +1483,7 @@ bool cmFindPackageCommand::CheckVersion(std::string const& config_file)
   ConfigFileInfo configFileInfo;
   configFileInfo.filename = config_file;
   configFileInfo.version = version;
-  this->ConsideredConfigs.push_back(configFileInfo);
+  this->ConsideredConfigs.push_back(std::move(configFileInfo));
 
   return result;
 }
@@ -1609,10 +1610,10 @@ protected:
 private:
   bool Search(cmFileList&);
   virtual bool Search(std::string const& parent, cmFileList&) = 0;
-  virtual CM_AUTO_PTR<cmFileListGeneratorBase> Clone() const = 0;
+  virtual std::unique_ptr<cmFileListGeneratorBase> Clone() const = 0;
   friend class cmFileList;
   cmFileListGeneratorBase* SetNext(cmFileListGeneratorBase const& next);
-  CM_AUTO_PTR<cmFileListGeneratorBase> Next;
+  std::unique_ptr<cmFileListGeneratorBase> Next;
 };
 
 class cmFileList
@@ -1620,7 +1621,7 @@ class cmFileList
 public:
   cmFileList()
     : First()
-    , Last(CM_NULLPTR)
+    , Last(nullptr)
   {
   }
   virtual ~cmFileList() {}
@@ -1636,7 +1637,7 @@ public:
   }
   bool Search()
   {
-    if (this->First.get()) {
+    if (this->First) {
       return this->First->Search(*this);
     }
     return false;
@@ -1645,7 +1646,7 @@ public:
 private:
   virtual bool Visit(std::string const& fullPath) = 0;
   friend class cmFileListGeneratorBase;
-  CM_AUTO_PTR<cmFileListGeneratorBase> First;
+  std::unique_ptr<cmFileListGeneratorBase> First;
   cmFileListGeneratorBase* Last;
 };
 
@@ -1660,7 +1661,7 @@ public:
   }
 
 private:
-  bool Visit(std::string const& fullPath) CM_OVERRIDE
+  bool Visit(std::string const& fullPath) override
   {
     if (this->UseSuffixes) {
       return this->FPC->SearchDirectory(fullPath);
@@ -1686,7 +1687,7 @@ cmFileListGeneratorBase* cmFileListGeneratorBase::SetNext(
 bool cmFileListGeneratorBase::Consider(std::string const& fullPath,
                                        cmFileList& listing)
 {
-  if (this->Next.get()) {
+  if (this->Next) {
     return this->Next->Search(fullPath + "/", listing);
   }
   return listing.Visit(fullPath + "/");
@@ -1708,14 +1709,14 @@ public:
 
 private:
   std::string String;
-  bool Search(std::string const& parent, cmFileList& lister) CM_OVERRIDE
+  bool Search(std::string const& parent, cmFileList& lister) override
   {
     std::string fullPath = parent + this->String;
     return this->Consider(fullPath, lister);
   }
-  CM_AUTO_PTR<cmFileListGeneratorBase> Clone() const CM_OVERRIDE
+  std::unique_ptr<cmFileListGeneratorBase> Clone() const override
   {
-    CM_AUTO_PTR<cmFileListGeneratorBase> g(
+    std::unique_ptr<cmFileListGeneratorBase> g(
       new cmFileListGeneratorFixed(*this));
     return g;
   }
@@ -1737,19 +1738,18 @@ public:
 
 private:
   std::vector<std::string> const& Vector;
-  bool Search(std::string const& parent, cmFileList& lister) CM_OVERRIDE
+  bool Search(std::string const& parent, cmFileList& lister) override
   {
-    for (std::vector<std::string>::const_iterator i = this->Vector.begin();
-         i != this->Vector.end(); ++i) {
-      if (this->Consider(parent + *i, lister)) {
+    for (std::string const& i : this->Vector) {
+      if (this->Consider(parent + i, lister)) {
         return true;
       }
     }
     return false;
   }
-  CM_AUTO_PTR<cmFileListGeneratorBase> Clone() const CM_OVERRIDE
+  std::unique_ptr<cmFileListGeneratorBase> Clone() const override
   {
-    CM_AUTO_PTR<cmFileListGeneratorBase> g(
+    std::unique_ptr<cmFileListGeneratorBase> g(
       new cmFileListGeneratorEnumerate(*this));
     return g;
   }
@@ -1787,7 +1787,7 @@ protected:
 
 private:
   std::vector<std::string> const& Names;
-  bool Search(std::string const& parent, cmFileList& lister) CM_OVERRIDE
+  bool Search(std::string const& parent, cmFileList& lister) override
   {
     // Construct a list of matches.
     std::vector<std::string> matches;
@@ -1798,9 +1798,8 @@ private:
       if (strcmp(fname, ".") == 0 || strcmp(fname, "..") == 0) {
         continue;
       }
-      for (std::vector<std::string>::const_iterator ni = this->Names.begin();
-           ni != this->Names.end(); ++ni) {
-        if (cmsysString_strncasecmp(fname, ni->c_str(), ni->length()) == 0) {
+      for (std::string const& n : this->Names) {
+        if (cmsysString_strncasecmp(fname, n.c_str(), n.length()) == 0) {
           matches.push_back(fname);
         }
       }
@@ -1813,17 +1812,16 @@ private:
                                  SortDirection);
     }
 
-    for (std::vector<std::string>::const_iterator i = matches.begin();
-         i != matches.end(); ++i) {
-      if (this->Consider(parent + *i, lister)) {
+    for (std::string const& i : matches) {
+      if (this->Consider(parent + i, lister)) {
         return true;
       }
     }
     return false;
   }
-  CM_AUTO_PTR<cmFileListGeneratorBase> Clone() const CM_OVERRIDE
+  std::unique_ptr<cmFileListGeneratorBase> Clone() const override
   {
-    CM_AUTO_PTR<cmFileListGeneratorBase> g(
+    std::unique_ptr<cmFileListGeneratorBase> g(
       new cmFileListGeneratorProject(*this));
     return g;
   }
@@ -1849,7 +1847,7 @@ public:
 private:
   std::vector<std::string> const& Names;
   std::string Extension;
-  bool Search(std::string const& parent, cmFileList& lister) CM_OVERRIDE
+  bool Search(std::string const& parent, cmFileList& lister) override
   {
     // Construct a list of matches.
     std::vector<std::string> matches;
@@ -1860,9 +1858,7 @@ private:
       if (strcmp(fname, ".") == 0 || strcmp(fname, "..") == 0) {
         continue;
       }
-      for (std::vector<std::string>::const_iterator ni = this->Names.begin();
-           ni != this->Names.end(); ++ni) {
-        std::string name = *ni;
+      for (std::string name : this->Names) {
         name += this->Extension;
         if (cmsysString_strcasecmp(fname, name.c_str()) == 0) {
           matches.push_back(fname);
@@ -1870,17 +1866,16 @@ private:
       }
     }
 
-    for (std::vector<std::string>::const_iterator i = matches.begin();
-         i != matches.end(); ++i) {
-      if (this->Consider(parent + *i, lister)) {
+    for (std::string const& i : matches) {
+      if (this->Consider(parent + i, lister)) {
         return true;
       }
     }
     return false;
   }
-  CM_AUTO_PTR<cmFileListGeneratorBase> Clone() const CM_OVERRIDE
+  std::unique_ptr<cmFileListGeneratorBase> Clone() const override
   {
-    CM_AUTO_PTR<cmFileListGeneratorBase> g(
+    std::unique_ptr<cmFileListGeneratorBase> g(
       new cmFileListGeneratorMacProject(*this));
     return g;
   }
@@ -1903,7 +1898,7 @@ public:
 
 private:
   std::string String;
-  bool Search(std::string const& parent, cmFileList& lister) CM_OVERRIDE
+  bool Search(std::string const& parent, cmFileList& lister) override
   {
     // Look for matching files.
     std::vector<std::string> matches;
@@ -1922,9 +1917,9 @@ private:
     }
     return false;
   }
-  CM_AUTO_PTR<cmFileListGeneratorBase> Clone() const CM_OVERRIDE
+  std::unique_ptr<cmFileListGeneratorBase> Clone() const override
   {
-    CM_AUTO_PTR<cmFileListGeneratorBase> g(
+    std::unique_ptr<cmFileListGeneratorBase> g(
       new cmFileListGeneratorCaseInsensitive(*this));
     return g;
   }
@@ -1946,7 +1941,7 @@ public:
 
 private:
   std::string Pattern;
-  bool Search(std::string const& parent, cmFileList& lister) CM_OVERRIDE
+  bool Search(std::string const& parent, cmFileList& lister) override
   {
     // Glob the set of matching files.
     std::string expr = parent;
@@ -1958,20 +1953,18 @@ private:
     std::vector<std::string> const& files = g.GetFiles();
 
     // Look for directories among the matches.
-    for (std::vector<std::string>::const_iterator fi = files.begin();
-         fi != files.end(); ++fi) {
-      if (cmSystemTools::FileIsDirectory(*fi)) {
-        if (this->Consider(*fi, lister)) {
+    for (std::string const& f : files) {
+      if (cmSystemTools::FileIsDirectory(f)) {
+        if (this->Consider(f, lister)) {
           return true;
         }
       }
     }
     return false;
   }
-  CM_AUTO_PTR<cmFileListGeneratorBase> Clone() const CM_OVERRIDE
+  std::unique_ptr<cmFileListGeneratorBase> Clone() const override
   {
-    CM_AUTO_PTR<cmFileListGeneratorBase> g(new cmFileListGeneratorGlob(*this));
-    return g;
+    return cm::make_unique<cmFileListGeneratorGlob>(*this);
   }
 };
 

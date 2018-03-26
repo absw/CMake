@@ -2,6 +2,7 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmServer.h"
 
+#include "cmAlgorithms.h"
 #include "cmConnection.h"
 #include "cmFileMonitor.h"
 #include "cmServerDictionary.h"
@@ -15,18 +16,21 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <iostream>
 #include <memory>
+#include <mutex>
 #include <utility>
 
 void on_signal(uv_signal_t* signal, int signum)
 {
-  auto conn = reinterpret_cast<cmServerBase*>(signal->data);
+  auto conn = static_cast<cmServerBase*>(signal->data);
   conn->OnSignal(signum);
 }
 
 static void on_walk_to_shutdown(uv_handle_t* handle, void* arg)
 {
   (void)arg;
+  assert(uv_is_closing(handle));
   if (!uv_is_closing(handle)) {
     uv_close(handle, &cmEventBasedConnection::on_close);
   }
@@ -56,9 +60,7 @@ cmServer::cmServer(cmConnection* conn, bool supportExperimental)
 
 cmServer::~cmServer()
 {
-  if (!this->Protocol) { // Server was never fully started!
-    return;
-  }
+  Close();
 
   for (cmServerProtocol* p : this->SupportedProtocols) {
     delete p;
@@ -78,7 +80,7 @@ void cmServer::ProcessRequest(cmConnection* connection,
   std::unique_ptr<DebugInfo> debug;
   Json::Value debugValue = value["debug"];
   if (!debugValue.isNull()) {
-    debug = std::make_unique<DebugInfo>();
+    debug = cm::make_unique<DebugInfo>();
     debug->OutputFile = debugValue["dumpToFile"].asString();
     debug->PrintStatistics = debugValue["showStats"].asBool();
   }
@@ -86,7 +88,7 @@ void cmServer::ProcessRequest(cmConnection* connection,
   const cmServerRequest request(this, connection, value[kTYPE_KEY].asString(),
                                 value[kCOOKIE_KEY].asString(), value);
 
-  if (request.Type == "") {
+  if (request.Type.empty()) {
     cmServerResponse response(request);
     response.SetError("No type given in request.");
     this->WriteResponse(connection, response, nullptr);
@@ -109,6 +111,7 @@ void cmServer::ProcessRequest(cmConnection* connection,
 void cmServer::RegisterProtocol(cmServerProtocol* protocol)
 {
   if (protocol->IsExperimental() && !this->SupportExperimental) {
+    delete protocol;
     return;
   }
   auto version = protocol->ProtocolVersion();
@@ -219,7 +222,7 @@ cmServerResponse cmServer::SetProtocolVersion(const cmServerRequest& request)
 
   std::string errorMessage;
   if (!this->Protocol->Activate(this, request, &errorMessage)) {
-    this->Protocol = CM_NULLPTR;
+    this->Protocol = nullptr;
     return request.ReportError("Failed to activate protocol version: " +
                                errorMessage);
   }
@@ -246,6 +249,7 @@ cmFileMonitor* cmServer::FileMonitor() const
 void cmServer::WriteJsonObject(const Json::Value& jsonValue,
                                const DebugInfo* debug) const
 {
+  cm::shared_lock<cm::shared_mutex> lock(ConnectionsMutex);
   for (auto& connection : this->Connections) {
     WriteJsonObject(connection.get(), jsonValue, debug);
   }
@@ -284,8 +288,7 @@ void cmServer::WriteJsonObject(cmConnection* connection,
     }
   }
 
-  connection->WriteData(std::string("\n") + kSTART_MAGIC + std::string("\n") +
-                        result + kEND_MAGIC + std::string("\n"));
+  connection->WriteData(result);
 }
 
 cmServerProtocol* cmServer::FindMatchingProtocol(
@@ -410,9 +413,12 @@ void cmServer::StartShutDown()
 
 static void __start_thread(void* arg)
 {
-  auto server = reinterpret_cast<cmServerBase*>(arg);
+  auto server = static_cast<cmServerBase*>(arg);
   std::string error;
-  server->Serve(&error);
+  bool success = server->Serve(&error);
+  if (!success || error.empty() == false) {
+    std::cerr << "Error during serve: " << error << std::endl;
+  }
 }
 
 bool cmServerBase::StartServeThread()
@@ -422,34 +428,51 @@ bool cmServerBase::StartServeThread()
   return true;
 }
 
+static void __shutdownThread(uv_async_t* arg)
+{
+  auto server = static_cast<cmServerBase*>(arg->data);
+  server->StartShutDown();
+}
+
 bool cmServerBase::Serve(std::string* errorMessage)
 {
+#ifndef NDEBUG
+  uv_thread_t blank_thread_t = {};
+  assert(uv_thread_equal(&blank_thread_t, &ServeThreadId));
+  ServeThreadId = uv_thread_self();
+#endif
+
   errorMessage->clear();
 
-  uv_signal_init(&Loop, &this->SIGINTHandler);
-  uv_signal_init(&Loop, &this->SIGHUPHandler);
+  ShutdownSignal.init(Loop, __shutdownThread, this);
 
-  this->SIGINTHandler.data = this;
-  this->SIGHUPHandler.data = this;
+  SIGINTHandler.init(Loop, this);
+  SIGHUPHandler.init(Loop, this);
 
-  uv_signal_start(&this->SIGINTHandler, &on_signal, SIGINT);
-  uv_signal_start(&this->SIGHUPHandler, &on_signal, SIGHUP);
+  SIGINTHandler.start(&on_signal, SIGINT);
+  SIGHUPHandler.start(&on_signal, SIGHUP);
 
   OnServeStart();
 
-  for (auto& connection : Connections) {
-    if (!connection->OnServeStart(errorMessage)) {
-      return false;
+  {
+    cm::shared_lock<cm::shared_mutex> lock(ConnectionsMutex);
+    for (auto& connection : Connections) {
+      if (!connection->OnServeStart(errorMessage)) {
+        return false;
+      }
     }
   }
 
   if (uv_run(&Loop, UV_RUN_DEFAULT) != 0) {
+    // It is important we don't ever let the event loop exit with open handles
+    // at best this is a memory leak, but it can also introduce race conditions
+    // which can hang the program.
+    assert(false && "Event loop stopped in unclean state.");
+
     *errorMessage = "Internal Error: Event loop stopped in unclean state.";
-    StartShutDown();
     return false;
   }
 
-  ServeThreadRunning = false;
   return true;
 }
 
@@ -457,36 +480,25 @@ void cmServerBase::OnConnected(cmConnection*)
 {
 }
 
-void cmServerBase::OnDisconnect()
-{
-}
-
 void cmServerBase::OnServeStart()
 {
-  uv_signal_start(&this->SIGINTHandler, &on_signal, SIGINT);
-  uv_signal_start(&this->SIGHUPHandler, &on_signal, SIGHUP);
 }
 
 void cmServerBase::StartShutDown()
 {
-  if (!uv_is_closing((const uv_handle_t*)&this->SIGINTHandler)) {
-    uv_signal_stop(&this->SIGINTHandler);
+  ShutdownSignal.reset();
+  SIGINTHandler.reset();
+  SIGHUPHandler.reset();
+
+  {
+    std::unique_lock<cm::shared_mutex> lock(ConnectionsMutex);
+    for (auto& connection : Connections) {
+      connection->OnConnectionShuttingDown();
+    }
+    Connections.clear();
   }
 
-  if (!uv_is_closing((const uv_handle_t*)&this->SIGHUPHandler)) {
-    uv_signal_stop(&this->SIGHUPHandler);
-  }
-
-  for (auto& connection : Connections) {
-    connection->OnConnectionShuttingDown();
-  }
-  Connections.clear();
-
-  uv_stop(&Loop);
-
-  uv_walk(&Loop, on_walk_to_shutdown, CM_NULLPTR);
-
-  uv_run(&Loop, UV_RUN_DEFAULT);
+  uv_walk(&Loop, on_walk_to_shutdown, nullptr);
 }
 
 bool cmServerBase::OnSignal(int signum)
@@ -498,31 +510,37 @@ bool cmServerBase::OnSignal(int signum)
 
 cmServerBase::cmServerBase(cmConnection* connection)
 {
-  uv_loop_init(&Loop);
-
-  uv_signal_init(&Loop, &this->SIGINTHandler);
-  uv_signal_init(&Loop, &this->SIGHUPHandler);
-
-  this->SIGINTHandler.data = this;
-  this->SIGHUPHandler.data = this;
+  auto err = uv_loop_init(&Loop);
+  (void)err;
+  Loop.data = this;
+  assert(err == 0);
 
   AddNewConnection(connection);
 }
 
+void cmServerBase::Close()
+{
+  if (Loop.data) {
+    if (ServeThreadRunning) {
+      this->ShutdownSignal.send();
+      uv_thread_join(&ServeThread);
+    }
+
+    uv_loop_close(&Loop);
+    Loop.data = nullptr;
+  }
+}
 cmServerBase::~cmServerBase()
 {
-
-  if (ServeThreadRunning) {
-    StartShutDown();
-    uv_thread_join(&ServeThread);
-  }
-
-  uv_loop_close(&Loop);
+  Close();
 }
 
 void cmServerBase::AddNewConnection(cmConnection* ownedConnection)
 {
-  Connections.emplace_back(ownedConnection);
+  {
+    std::unique_lock<cm::shared_mutex> lock(ConnectionsMutex);
+    Connections.emplace_back(ownedConnection);
+  }
   ownedConnection->SetServer(this);
 }
 
@@ -536,10 +554,14 @@ void cmServerBase::OnDisconnect(cmConnection* pConnection)
   auto pred = [pConnection](const std::unique_ptr<cmConnection>& m) {
     return m.get() == pConnection;
   };
-  Connections.erase(
-    std::remove_if(Connections.begin(), Connections.end(), pred),
-    Connections.end());
+  {
+    std::unique_lock<cm::shared_mutex> lock(ConnectionsMutex);
+    Connections.erase(
+      std::remove_if(Connections.begin(), Connections.end(), pred),
+      Connections.end());
+  }
+
   if (Connections.empty()) {
-    StartShutDown();
+    this->ShutdownSignal.send();
   }
 }

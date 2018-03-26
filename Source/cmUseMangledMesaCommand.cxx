@@ -13,8 +13,8 @@ bool cmUseMangledMesaCommand::InitialPass(std::vector<std::string> const& args,
                                           cmExecutionStatus&)
 {
   // expected two arguments:
-  // arguement one: the full path to gl_mangle.h
-  // arguement two : directory for output of edited headers
+  // argument one: the full path to gl_mangle.h
+  // argument two : directory for output of edited headers
   if (args.size() != 2) {
     this->SetError("called with incorrect number of arguments");
     return false;
@@ -23,7 +23,7 @@ bool cmUseMangledMesaCommand::InitialPass(std::vector<std::string> const& args,
   std::string glh = inputDir;
   glh += "/";
   glh += "gl.h";
-  if (!cmSystemTools::FileExists(glh.c_str())) {
+  if (!cmSystemTools::FileExists(glh)) {
     std::string e = "Bad path to Mesa, could not find: ";
     e += glh;
     e += " ";
@@ -38,11 +38,10 @@ bool cmUseMangledMesaCommand::InitialPass(std::vector<std::string> const& args,
     return false;
   }
   cmSystemTools::MakeDirectory(destDir);
-  for (std::vector<std::string>::iterator i = files.begin(); i != files.end();
-       ++i) {
+  for (std::string const& f : files) {
     std::string path = inputDir;
     path += "/";
-    path += *i;
+    path += f;
     this->CopyAndFullPathMesaHeader(path.c_str(), destDir);
   }
 

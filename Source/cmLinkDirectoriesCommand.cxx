@@ -19,9 +19,8 @@ bool cmLinkDirectoriesCommand::InitialPass(
     return true;
   }
 
-  for (std::vector<std::string>::const_iterator i = args.begin();
-       i != args.end(); ++i) {
-    this->AddLinkDir(*i);
+  for (std::string const& i : args) {
+    this->AddLinkDir(i);
   }
   return true;
 }
@@ -30,7 +29,7 @@ void cmLinkDirectoriesCommand::AddLinkDir(std::string const& dir)
 {
   std::string unixPath = dir;
   cmSystemTools::ConvertToUnixSlashes(unixPath);
-  if (!cmSystemTools::FileIsFullPath(unixPath.c_str())) {
+  if (!cmSystemTools::FileIsFullPath(unixPath)) {
     bool convertToAbsolute = false;
     std::ostringstream e;
     /* clang-format off */

@@ -84,6 +84,7 @@ Properties on Directories
    /prop_dir/RULE_LAUNCH_LINK
    /prop_dir/SOURCE_DIR
    /prop_dir/SUBDIRECTORIES
+   /prop_dir/TESTS
    /prop_dir/TEST_INCLUDE_FILES
    /prop_dir/VARIABLES
    /prop_dir/VS_GLOBAL_SECTION_POST_section
@@ -121,8 +122,11 @@ Properties on Targets
    /prop_tgt/ARCHIVE_OUTPUT_NAME_CONFIG
    /prop_tgt/ARCHIVE_OUTPUT_NAME
    /prop_tgt/AUTOGEN_BUILD_DIR
+   /prop_tgt/AUTOGEN_PARALLEL
    /prop_tgt/AUTOGEN_TARGET_DEPENDS
+   /prop_tgt/AUTOMOC_COMPILER_PREDEFINES
    /prop_tgt/AUTOMOC_DEPEND_FILTERS
+   /prop_tgt/AUTOMOC_MACRO_NAMES
    /prop_tgt/AUTOMOC_MOC_OPTIONS
    /prop_tgt/AUTOMOC
    /prop_tgt/AUTOUIC
@@ -182,6 +186,7 @@ Properties on Targets
    /prop_tgt/HAS_CXX
    /prop_tgt/IMPLICIT_DEPENDS_INCLUDE_TRANSFORM
    /prop_tgt/IMPORTED_CONFIGURATIONS
+   /prop_tgt/IMPORTED_GLOBAL
    /prop_tgt/IMPORTED_IMPLIB_CONFIG
    /prop_tgt/IMPORTED_IMPLIB
    /prop_tgt/IMPORTED_LIBNAME_CONFIG
@@ -226,6 +231,7 @@ Properties on Targets
    /prop_tgt/LABELS
    /prop_tgt/LANG_CLANG_TIDY
    /prop_tgt/LANG_COMPILER_LAUNCHER
+   /prop_tgt/LANG_CPPCHECK
    /prop_tgt/LANG_CPPLINT
    /prop_tgt/LANG_INCLUDE_WHAT_YOU_USE
    /prop_tgt/LANG_VISIBILITY_PRESET
@@ -365,10 +371,12 @@ Properties on Source Files
    /prop_sf/AUTORCC_OPTIONS
    /prop_sf/COMPILE_DEFINITIONS
    /prop_sf/COMPILE_FLAGS
+   /prop_sf/COMPILE_OPTIONS
    /prop_sf/EXTERNAL_OBJECT
    /prop_sf/Fortran_FORMAT
    /prop_sf/GENERATED
    /prop_sf/HEADER_FILE_ONLY
+   /prop_sf/INCLUDE_DIRECTORIES
    /prop_sf/KEEP_EXTENSION
    /prop_sf/LABELS
    /prop_sf/LANGUAGE
@@ -387,10 +395,14 @@ Properties on Source Files
    /prop_sf/VS_DEPLOYMENT_LOCATION
    /prop_sf/VS_INCLUDE_IN_VSIX
    /prop_sf/VS_RESOURCE_GENERATOR
+   /prop_sf/VS_SHADER_DISABLE_OPTIMIZATIONS
+   /prop_sf/VS_SHADER_ENABLE_DEBUG
    /prop_sf/VS_SHADER_ENTRYPOINT
    /prop_sf/VS_SHADER_FLAGS
    /prop_sf/VS_SHADER_MODEL
+   /prop_sf/VS_SHADER_OUTPUT_HEADER_FILE
    /prop_sf/VS_SHADER_TYPE
+   /prop_sf/VS_SHADER_VARIABLE_NAME
    /prop_sf/VS_TOOL_OVERRIDE.rst
    /prop_sf/VS_XAML_TYPE
    /prop_sf/WRAP_EXCLUDE

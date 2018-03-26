@@ -4,9 +4,11 @@
 
 #include "cmCTest.h"
 #include "cmCTestGenericHandler.h"
+#include "cmDuration.h"
 #include "cmMakefile.h"
 #include "cmSystemTools.h"
 
+#include <chrono>
 #include <sstream>
 #include <stdlib.h>
 #include <vector>
@@ -27,7 +29,7 @@ cmCTestTestCommand::cmCTestTestCommand()
   this->Arguments[ctt_SCHEDULE_RANDOM] = "SCHEDULE_RANDOM";
   this->Arguments[ctt_STOP_TIME] = "STOP_TIME";
   this->Arguments[ctt_TEST_LOAD] = "TEST_LOAD";
-  this->Arguments[ctt_LAST] = CM_NULLPTR;
+  this->Arguments[ctt_LAST] = nullptr;
   this->Last = ctt_LAST;
 }
 
@@ -36,14 +38,14 @@ cmCTestGenericHandler* cmCTestTestCommand::InitializeHandler()
   const char* ctestTimeout =
     this->Makefile->GetDefinition("CTEST_TEST_TIMEOUT");
 
-  double timeout;
+  cmDuration timeout;
   if (ctestTimeout) {
-    timeout = atof(ctestTimeout);
+    timeout = cmDuration(atof(ctestTimeout));
   } else {
     timeout = this->CTest->GetTimeOut();
-    if (timeout <= 0) {
+    if (timeout <= cmDuration::zero()) {
       // By default use timeout of 10 minutes
-      timeout = 600;
+      timeout = std::chrono::minutes(10);
     }
   }
   this->CTest->SetTimeOut(timeout);
