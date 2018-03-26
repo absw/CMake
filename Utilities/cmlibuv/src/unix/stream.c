@@ -98,7 +98,7 @@ void uv__stream_init(uv_loop_t* loop,
       loop->emfile_fd = err;
   }
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(CMAKE_BOOTSTRAP)
   stream->select = NULL;
 #endif /* defined(__APPLE_) */
 
@@ -107,7 +107,7 @@ void uv__stream_init(uv_loop_t* loop,
 
 
 static void uv__stream_osx_interrupt_select(uv_stream_t* stream) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(CMAKE_BOOTSTRAP)
   /* Notify select() thread about state change */
   uv__stream_select_t* s;
   int r;
@@ -131,7 +131,7 @@ static void uv__stream_osx_interrupt_select(uv_stream_t* stream) {
 }
 
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(CMAKE_BOOTSTRAP)
 static void uv__stream_osx_select(void* arg) {
   uv_stream_t* stream;
   uv__stream_select_t* s;
@@ -514,7 +514,7 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
   int err;
 
   stream = container_of(w, uv_stream_t, io_watcher);
-  assert(events == POLLIN);
+  assert(events & POLLIN);
   assert(stream->accepted_fd == -1);
   assert(!(stream->flags & UV_CLOSING));
 
@@ -750,6 +750,7 @@ static void uv__write(uv_stream_t* stream) {
   int iovmax;
   int iovcnt;
   ssize_t n;
+  int err;
 
 start:
 
@@ -782,13 +783,20 @@ start:
    */
 
   if (req->send_handle) {
+    int fd_to_send;
     struct msghdr msg;
     struct cmsghdr *cmsg;
-    int fd_to_send = uv__handle_fd((uv_handle_t*) req->send_handle);
     union {
       char data[64];
       struct cmsghdr alias;
     } scratch;
+
+    if (uv__is_closing(req->send_handle)) {
+      err = -EBADF;
+      goto error;
+    }
+
+    fd_to_send = uv__handle_fd((uv_handle_t*) req->send_handle);
 
     memset(&scratch, 0, sizeof(scratch));
 
@@ -851,15 +859,9 @@ start:
   }
 
   if (n < 0) {
-    if (errno != EAGAIN && errno != EWOULDBLOCK) {
-      /* Error */
-      req->error = -errno;
-      uv__write_req_finish(req);
-      uv__io_stop(stream->loop, &stream->io_watcher, POLLOUT);
-      if (!uv__io_active(&stream->io_watcher, POLLIN))
-        uv__handle_stop(stream);
-      uv__stream_osx_interrupt_select(stream);
-      return;
+    if (errno != EAGAIN && errno != EWOULDBLOCK && errno != ENOBUFS) {
+      err = -errno;
+      goto error;
     } else if (stream->flags & UV_STREAM_BLOCKING) {
       /* If this is a blocking stream, try again. */
       goto start;
@@ -922,6 +924,16 @@ start:
   uv__io_start(stream->loop, &stream->io_watcher, POLLOUT);
 
   /* Notify select() thread about state change */
+  uv__stream_osx_interrupt_select(stream);
+
+  return;
+
+error:
+  req->error = err;
+  uv__write_req_finish(req);
+  uv__io_stop(stream->loop, &stream->io_watcher, POLLOUT);
+  if (!uv__io_active(&stream->io_watcher, POLLIN))
+    uv__handle_stop(stream);
   uv__stream_osx_interrupt_select(stream);
 }
 
@@ -1249,8 +1261,9 @@ static void uv__read(uv_stream_t* stream) {
 
 
 int uv_shutdown(uv_shutdown_t* req, uv_stream_t* stream, uv_shutdown_cb cb) {
-  assert((stream->type == UV_TCP || stream->type == UV_NAMED_PIPE) &&
-         "uv_shutdown (unix) only supports uv_handle_t right now");
+  assert(stream->type == UV_TCP ||
+         stream->type == UV_TTY ||
+         stream->type == UV_NAMED_PIPE);
 
   if (!(stream->flags & UV_STREAM_WRITABLE) ||
       stream->flags & UV_STREAM_SHUT ||
@@ -1598,7 +1611,7 @@ int uv_is_writable(const uv_stream_t* stream) {
 }
 
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(CMAKE_BOOTSTRAP)
 int uv___stream_fd(const uv_stream_t* handle) {
   const uv__stream_select_t* s;
 
@@ -1619,7 +1632,7 @@ void uv__stream_close(uv_stream_t* handle) {
   unsigned int i;
   uv__stream_queued_fds_t* queued_fds;
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(CMAKE_BOOTSTRAP)
   /* Terminate select loop first */
   if (handle->select != NULL) {
     uv__stream_select_t* s;

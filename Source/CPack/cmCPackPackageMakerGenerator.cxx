@@ -13,6 +13,7 @@
 
 #include "cmCPackComponentGroup.h"
 #include "cmCPackLog.h"
+#include "cmDuration.h"
 #include "cmGeneratedFileStream.h"
 #include "cmSystemTools.h"
 #include "cmXMLWriter.h"
@@ -275,8 +276,9 @@ int cmCPackPackageMakerGenerator::PackageFiles()
     if (this->PackageMakerVersion > 2.0) {
       pkgCmd << " -v";
     }
-    if (!RunPackageMaker(pkgCmd.str().c_str(), packageDirFileName.c_str()))
+    if (!RunPackageMaker(pkgCmd.str().c_str(), packageDirFileName.c_str())) {
       return 0;
+    }
   } else {
     // We have built the package in place. Generate the
     // distribution.dist file to describe it for the installer.
@@ -287,16 +289,16 @@ int cmCPackPackageMakerGenerator::PackageFiles()
   tmpFile += "/hdiutilOutput.log";
   std::ostringstream dmgCmd;
   dmgCmd << "\"" << this->GetOption("CPACK_INSTALLER_PROGRAM_DISK_IMAGE")
-         << "\" create -ov -format UDZO -srcfolder \"" << packageDirFileName
-         << "\" \"" << packageFileNames[0] << "\"";
+         << "\" create -ov -fs HFS+ -format UDZO -srcfolder \""
+         << packageDirFileName << "\" \"" << packageFileNames[0] << "\"";
   std::string output;
   int retVal = 1;
   int numTries = 10;
   bool res = false;
   while (numTries > 0) {
-    res =
-      cmSystemTools::RunSingleCommand(dmgCmd.str().c_str(), &output, &output,
-                                      &retVal, 0, this->GeneratorVerbose, 0);
+    res = cmSystemTools::RunSingleCommand(
+      dmgCmd.str().c_str(), &output, &output, &retVal, nullptr,
+      this->GeneratorVerbose, cmDuration::zero());
     if (res && !retVal) {
       numTries = -1;
       break;
@@ -466,7 +468,8 @@ bool cmCPackPackageMakerGenerator::RunPackageMaker(const char* command,
   std::string output;
   int retVal = 1;
   bool res = cmSystemTools::RunSingleCommand(
-    command, &output, &output, &retVal, 0, this->GeneratorVerbose, 0);
+    command, &output, &output, &retVal, nullptr, this->GeneratorVerbose,
+    cmDuration::zero());
   cmCPackLogger(cmCPackLog::LOG_VERBOSE, "Done running package maker"
                   << std::endl);
   if (!res || retVal) {

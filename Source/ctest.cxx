@@ -1,6 +1,5 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
    file Copyright.txt or https://cmake.org/licensing for details.  */
-#include "cmConfigure.h"
 
 #include "CTest/cmCTestLaunch.h"
 #include "CTest/cmCTestScriptHandler.h"
@@ -18,13 +17,13 @@
 #include <vector>
 
 static const char* cmDocumentationName[][2] = {
-  { CM_NULLPTR, "  ctest - Testing driver provided by CMake." },
-  { CM_NULLPTR, CM_NULLPTR }
+  { nullptr, "  ctest - Testing driver provided by CMake." },
+  { nullptr, nullptr }
 };
 
-static const char* cmDocumentationUsage[][2] = { { CM_NULLPTR,
+static const char* cmDocumentationUsage[][2] = { { nullptr,
                                                    "  ctest [options]" },
-                                                 { CM_NULLPTR, CM_NULLPTR } };
+                                                 { nullptr, nullptr } };
 
 static const char* cmDocumentationOptions[][2] = {
   { "-C <cfg>, --build-config <cfg>", "Choose configuration to test." },
@@ -105,8 +104,6 @@ static const char* cmDocumentationOptions[][2] = {
   { "--test-timeout", "The time limit in seconds, internal use only." },
   { "--test-load", "CPU load threshold for starting new parallel tests." },
   { "--tomorrow-tag", "Nightly or experimental starts with next day tag." },
-  { "--ctest-config", "The configuration file used to initialize CTest state "
-                      "when submitting dashboards." },
   { "--overwrite", "Overwrite CTest configuration option." },
   { "--extra-submit <file>[;<file>]", "Submit extra files to the dashboard." },
   { "--force-new-ctest-process",
@@ -120,7 +117,7 @@ static const char* cmDocumentationOptions[][2] = {
   { "--http1.0", "Submit using HTTP 1.0." },
   { "--no-compress-output", "Do not compress test output when submitting." },
   { "--print-labels", "Print all available test labels." },
-  { CM_NULLPTR, CM_NULLPTR }
+  { nullptr, nullptr }
 };
 
 // this is a test driver program for cmCTest.
@@ -140,6 +137,7 @@ int main(int argc, char const* const* argv)
 
   cmSystemTools::DoNotInheritStdPipes();
   cmSystemTools::EnableMSVCDebugHook();
+  cmSystemTools::InitializeLibUV();
   cmSystemTools::FindCMakeResources(argv[0]);
 
   // Dispatch 'ctest --launch' mode directly.
@@ -187,6 +185,7 @@ int main(int argc, char const* const* argv)
 
   // copy the args to a vector
   std::vector<std::string> args;
+  args.reserve(argc);
   for (int i = 0; i < argc; ++i) {
     args.push_back(argv[i]);
   }

@@ -6,6 +6,7 @@
 
 #include "cmCPackGenerator.h"
 #include "cmCPackLog.h"
+#include "cmDuration.h"
 #include "cmGeneratedFileStream.h"
 #include "cmSystemTools.h"
 #include "cm_sys_stat.h"
@@ -144,8 +145,8 @@ int cmCPackOSXX11Generator::PackageFiles()
   tmpFile += "/hdiutilOutput.log";
   std::ostringstream dmgCmd;
   dmgCmd << "\"" << this->GetOption("CPACK_INSTALLER_PROGRAM_DISK_IMAGE")
-         << "\" create -ov -format UDZO -srcfolder \"" << diskImageDirectory
-         << "\" \"" << packageFileNames[0] << "\"";
+         << "\" create -ov -fs HFS+ -format UDZO -srcfolder \""
+         << diskImageDirectory << "\" \"" << packageFileNames[0] << "\"";
   cmCPackLogger(cmCPackLog::LOG_VERBOSE, "Compress disk image using command: "
                   << dmgCmd.str() << std::endl);
   // since we get random dashboard failures with this one
@@ -154,9 +155,9 @@ int cmCPackOSXX11Generator::PackageFiles()
   int numTries = 10;
   bool res = false;
   while (numTries > 0) {
-    res =
-      cmSystemTools::RunSingleCommand(dmgCmd.str().c_str(), &output, &output,
-                                      &retVal, 0, this->GeneratorVerbose, 0);
+    res = cmSystemTools::RunSingleCommand(
+      dmgCmd.str().c_str(), &output, &output, &retVal, nullptr,
+      this->GeneratorVerbose, cmDuration::zero());
     if (res && !retVal) {
       numTries = -1;
       break;

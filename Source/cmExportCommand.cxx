@@ -35,7 +35,7 @@ cmExportCommand::cmExportCommand()
   , ExportOld(&Helper, "EXPORT_LINK_INTERFACE_LIBRARIES", &ArgumentGroup)
   , AndroidMKFile(&Helper, "ANDROID_MK")
 {
-  this->ExportSet = CM_NULLPTR;
+  this->ExportSet = nullptr;
 }
 
 // cmExportCommand
@@ -51,10 +51,10 @@ bool cmExportCommand::InitialPass(std::vector<std::string> const& args,
     return this->HandlePackage(args);
   }
   if (args[0] == "EXPORT") {
-    this->ExportSetName.Follows(CM_NULLPTR);
+    this->ExportSetName.Follows(nullptr);
     this->ArgumentGroup.Follows(&this->ExportSetName);
   } else {
-    this->Targets.Follows(CM_NULLPTR);
+    this->Targets.Follows(nullptr);
     this->ArgumentGroup.Follows(&this->Targets);
   }
 
@@ -92,8 +92,8 @@ bool cmExportCommand::InitialPass(std::vector<std::string> const& args,
   }
 
   // Get the file to write.
-  if (cmSystemTools::FileIsFullPath(fname.c_str())) {
-    if (!this->Makefile->CanIWriteThisFile(fname.c_str())) {
+  if (cmSystemTools::FileIsFullPath(fname)) {
+    if (!this->Makefile->CanIWriteThisFile(fname)) {
       std::ostringstream e;
       e << "FILE option given filename \"" << fname
         << "\" which is in the source tree.\n";
@@ -136,42 +136,40 @@ bool cmExportCommand::InitialPass(std::vector<std::string> const& args,
     }
     this->ExportSet = setMap[setName];
   } else if (this->Targets.WasFound()) {
-    for (std::vector<std::string>::const_iterator currentTarget =
-           this->Targets.GetVector().begin();
-         currentTarget != this->Targets.GetVector().end(); ++currentTarget) {
-      if (this->Makefile->IsAlias(*currentTarget)) {
+    for (std::string const& currentTarget : this->Targets.GetVector()) {
+      if (this->Makefile->IsAlias(currentTarget)) {
         std::ostringstream e;
-        e << "given ALIAS target \"" << *currentTarget
+        e << "given ALIAS target \"" << currentTarget
           << "\" which may not be exported.";
         this->SetError(e.str());
         return false;
       }
 
-      if (cmTarget* target = gg->FindTarget(*currentTarget)) {
+      if (cmTarget* target = gg->FindTarget(currentTarget)) {
         if (target->GetType() == cmStateEnums::OBJECT_LIBRARY) {
           std::string reason;
           if (!this->Makefile->GetGlobalGenerator()
                  ->HasKnownObjectFileLocation(&reason)) {
             std::ostringstream e;
-            e << "given OBJECT library \"" << *currentTarget
+            e << "given OBJECT library \"" << currentTarget
               << "\" which may not be exported" << reason << ".";
             this->SetError(e.str());
             return false;
           }
         }
         if (target->GetType() == cmStateEnums::UTILITY) {
-          this->SetError("given custom target \"" + *currentTarget +
+          this->SetError("given custom target \"" + currentTarget +
                          "\" which may not be exported.");
           return false;
         }
       } else {
         std::ostringstream e;
-        e << "given target \"" << *currentTarget
+        e << "given target \"" << currentTarget
           << "\" which is not built by this project.";
         this->SetError(e.str());
         return false;
       }
-      targets.push_back(*currentTarget);
+      targets.push_back(currentTarget);
     }
     if (this->Append.IsEnabled()) {
       if (cmExportBuildFileGenerator* ebfg =
@@ -186,7 +184,7 @@ bool cmExportCommand::InitialPass(std::vector<std::string> const& args,
   }
 
   // Setup export file generation.
-  cmExportBuildFileGenerator* ebfg = CM_NULLPTR;
+  cmExportBuildFileGenerator* ebfg = nullptr;
   if (android) {
     ebfg = new cmExportBuildAndroidMKGenerator;
   } else {
@@ -207,12 +205,10 @@ bool cmExportCommand::InitialPass(std::vector<std::string> const& args,
   std::vector<std::string> configurationTypes;
   this->Makefile->GetConfigurations(configurationTypes);
   if (configurationTypes.empty()) {
-    configurationTypes.push_back("");
+    configurationTypes.emplace_back();
   }
-  for (std::vector<std::string>::const_iterator ci =
-         configurationTypes.begin();
-       ci != configurationTypes.end(); ++ci) {
-    ebfg->AddConfiguration(*ci);
+  for (std::string const& ct : configurationTypes) {
+    ebfg->AddConfiguration(ct);
   }
   if (this->ExportSet) {
     gg->AddBuildExportExportSet(ebfg);
@@ -350,10 +346,10 @@ void cmExportCommand::StorePackageRegistryDir(std::string const& package,
   fname += "/.cmake/packages/";
   fname += package;
 #endif
-  cmSystemTools::MakeDirectory(fname.c_str());
+  cmSystemTools::MakeDirectory(fname);
   fname += "/";
   fname += hash;
-  if (!cmSystemTools::FileExists(fname.c_str())) {
+  if (!cmSystemTools::FileExists(fname)) {
     cmGeneratedFileStream entry(fname.c_str(), true);
     if (entry) {
       entry << content << "\n";

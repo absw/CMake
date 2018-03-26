@@ -4,6 +4,7 @@
 
 #include <sstream>
 #include <stdio.h>
+#include <utility>
 
 #include "cmAlgorithms.h"
 #include "cmExecutionStatus.h"
@@ -19,12 +20,12 @@ public:
   cmMacroHelperCommand() {}
 
   ///! clean up any memory allocated by the macro
-  ~cmMacroHelperCommand() CM_OVERRIDE {}
+  ~cmMacroHelperCommand() override {}
 
   /**
    * This is a virtual constructor for the command.
    */
-  cmCommand* Clone() CM_OVERRIDE
+  cmCommand* Clone() override
   {
     cmMacroHelperCommand* newC = new cmMacroHelperCommand;
     // we must copy when we clone
@@ -40,10 +41,10 @@ public:
    * the CMakeLists.txt file.
    */
   bool InvokeInitialPass(const std::vector<cmListFileArgument>& args,
-                         cmExecutionStatus&) CM_OVERRIDE;
+                         cmExecutionStatus&) override;
 
   bool InitialPass(std::vector<std::string> const&,
-                   cmExecutionStatus&) CM_OVERRIDE
+                   cmExecutionStatus&) override
   {
     return false;
   }
@@ -98,20 +99,18 @@ bool cmMacroHelperCommand::InvokeInitialPass(
   // Invoke all the functions that were collected in the block.
   cmListFileFunction newLFF;
   // for each function
-  for (unsigned int c = 0; c < this->Functions.size(); ++c) {
+  for (cmListFileFunction const& func : this->Functions) {
     // Replace the formal arguments and then invoke the command.
     newLFF.Arguments.clear();
-    newLFF.Arguments.reserve(this->Functions[c].Arguments.size());
-    newLFF.Name = this->Functions[c].Name;
-    newLFF.Line = this->Functions[c].Line;
+    newLFF.Arguments.reserve(func.Arguments.size());
+    newLFF.Name = func.Name;
+    newLFF.Line = func.Line;
 
     // for each argument of the current function
-    for (std::vector<cmListFileArgument>::iterator k =
-           this->Functions[c].Arguments.begin();
-         k != this->Functions[c].Arguments.end(); ++k) {
+    for (cmListFileArgument const& k : func.Arguments) {
       cmListFileArgument arg;
-      arg.Value = k->Value;
-      if (k->Delim != cmListFileArgument::Bracket) {
+      arg.Value = k.Value;
+      if (k.Delim != cmListFileArgument::Bracket) {
         // replace formal arguments
         for (unsigned int j = 0; j < variables.size(); ++j) {
           cmSystemTools::ReplaceString(arg.Value, variables[j],
@@ -131,9 +130,9 @@ bool cmMacroHelperCommand::InvokeInitialPass(
           }
         }
       }
-      arg.Delim = k->Delim;
-      arg.Line = k->Line;
-      newLFF.Arguments.push_back(arg);
+      arg.Delim = k.Delim;
+      arg.Line = k.Line;
+      newLFF.Arguments.push_back(std::move(arg));
     }
     cmExecutionStatus status;
     if (!this->Makefile->ExecuteCommand(newLFF, status) ||

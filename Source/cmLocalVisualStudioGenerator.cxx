@@ -39,10 +39,8 @@ void cmLocalVisualStudioGenerator::ComputeObjectFilenames(
   // windows file names are not case sensitive.
   std::map<std::string, int> counts;
 
-  for (std::map<cmSourceFile const*, std::string>::iterator si =
-         mapping.begin();
-       si != mapping.end(); ++si) {
-    cmSourceFile const* sf = si->first;
+  for (auto const& si : mapping) {
+    cmSourceFile const* sf = si.first;
     std::string objectNameLower = cmSystemTools::LowerCase(
       cmSystemTools::GetFilenameWithoutLastExtension(sf->GetFullPath()));
     if (custom_ext) {
@@ -57,10 +55,8 @@ void cmLocalVisualStudioGenerator::ComputeObjectFilenames(
   // For all source files producing duplicate names we need unique
   // object name computation.
 
-  for (std::map<cmSourceFile const*, std::string>::iterator si =
-         mapping.begin();
-       si != mapping.end(); ++si) {
-    cmSourceFile const* sf = si->first;
+  for (auto& si : mapping) {
+    cmSourceFile const* sf = si.first;
     std::string objectName =
       cmSystemTools::GetFilenameWithoutLastExtension(sf->GetFullPath());
     if (custom_ext) {
@@ -74,16 +70,16 @@ void cmLocalVisualStudioGenerator::ComputeObjectFilenames(
       objectName = this->GetObjectFileNameWithoutTarget(
         *sf, dir_max, &keptSourceExtension, custom_ext);
     }
-    si->second = objectName;
+    si.second = objectName;
   }
 }
 
-CM_AUTO_PTR<cmCustomCommand>
+std::unique_ptr<cmCustomCommand>
 cmLocalVisualStudioGenerator::MaybeCreateImplibDir(cmGeneratorTarget* target,
                                                    const std::string& config,
                                                    bool isFortran)
 {
-  CM_AUTO_PTR<cmCustomCommand> pcc;
+  std::unique_ptr<cmCustomCommand> pcc;
 
   // If an executable exports symbols then VS wants to create an
   // import library but forgets to create the output directory.
@@ -135,7 +131,7 @@ std::string cmLocalVisualStudioGenerator::ConstructScript(
   std::string workingDirectory = ccg.GetWorkingDirectory();
 
   // Avoid leading or trailing newlines.
-  std::string newline = "";
+  std::string newline;
 
   // Line to check for error between commands.
   std::string check_error = newline_text;
@@ -191,12 +187,16 @@ std::string cmLocalVisualStudioGenerator::ConstructScript(
 
   // Write each command on a single line.
   for (unsigned int c = 0; c < ccg.GetNumberOfCommands(); ++c) {
+    // Add this command line.
+    std::string cmd = ccg.GetCommand(c);
+
+    if (cmd.empty()) {
+      continue;
+    }
+
     // Start a new line.
     script += newline;
     newline = newline_text;
-
-    // Add this command line.
-    std::string cmd = ccg.GetCommand(c);
 
     // Use "call " before any invocations of .bat or .cmd files
     // invoked as custom commands.

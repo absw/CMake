@@ -80,6 +80,7 @@ All Modules
    /module/ExternalData
    /module/ExternalProject
    /module/FeatureSummary
+   /module/FetchContent
    /module/FindALSA
    /module/FindArmadillo
    /module/FindASPELL
@@ -129,6 +130,7 @@ All Modules
    /module/FindIcotool
    /module/FindICU
    /module/FindImageMagick
+   /module/FindIconv
    /module/FindIntl
    /module/FindITK
    /module/FindJasper
@@ -153,6 +155,7 @@ All Modules
    /module/FindMPEG2
    /module/FindMPEG
    /module/FindMPI
+   /module/FindOpenACC
    /module/FindOpenAL
    /module/FindOpenCL
    /module/FindOpenGL
@@ -182,6 +185,7 @@ All Modules
    /module/FindosgWidget
    /module/FindPackageHandleStandardArgs
    /module/FindPackageMessage
+   /module/FindPatch
    /module/FindPerlLibs
    /module/FindPerl
    /module/FindPHP4

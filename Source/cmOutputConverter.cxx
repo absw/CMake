@@ -29,7 +29,7 @@ std::string cmOutputConverter::ConvertToOutputForExisting(
   // space.
   if (this->GetState()->UseWindowsShell() &&
       remote.find(' ') != std::string::npos &&
-      cmSystemTools::FileExists(remote.c_str())) {
+      cmSystemTools::FileExists(remote)) {
     std::string tmp;
     if (cmSystemTools::GetShortPath(remote, tmp)) {
       return this->ConvertToOutputFormat(tmp, format);
@@ -125,7 +125,7 @@ std::string cmOutputConverter::ForceToRelativePath(
   assert(local_path.empty() || local_path[local_path.size() - 1] != '/');
 
   // If the path is already relative then just return the path.
-  if (!cmSystemTools::FileIsFullPath(remote_path.c_str())) {
+  if (!cmSystemTools::FileIsFullPath(remote_path)) {
     return remote_path;
   }
 
@@ -285,12 +285,11 @@ cmOutputConverter::FortranFormat cmOutputConverter::GetFortranFormat(
   if (value && *value) {
     std::vector<std::string> fmt;
     cmSystemTools::ExpandListArgument(value, fmt);
-    for (std::vector<std::string>::iterator fi = fmt.begin(); fi != fmt.end();
-         ++fi) {
-      if (*fi == "FIXED") {
+    for (std::string const& fi : fmt) {
+      if (fi == "FIXED") {
         format = FortranFormatFixed;
       }
-      if (*fi == "FREE") {
+      if (fi == "FREE") {
         format = FortranFormatFree;
       }
     }
@@ -389,7 +388,7 @@ int cmOutputConverter::Shell__CharNeedsQuotes(char c, int flags)
 
 int cmOutputConverter::Shell__CharIsMakeVariableName(char c)
 {
-  return c && (c == '_' || isalpha(((int)c)));
+  return c && (c == '_' || isalpha((static_cast<int>(c))));
 }
 
 const char* cmOutputConverter::Shell__SkipMakeVariables(const char* c)

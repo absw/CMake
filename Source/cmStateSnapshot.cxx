@@ -220,7 +220,7 @@ void cmStateSnapshot::SetDefinition(std::string const& name,
 
 void cmStateSnapshot::RemoveDefinition(std::string const& name)
 {
-  this->Position->Vars->Set(name, CM_NULLPTR);
+  this->Position->Vars->Set(name, nullptr);
 }
 
 std::vector<std::string> cmStateSnapshot::UnusedKeys() const
@@ -386,6 +386,12 @@ void cmStateSnapshot::InitializeFromParent()
     parent->BuildSystemDirectory->CompileOptionsBacktraces,
     this->Position->BuildSystemDirectory->CompileOptionsBacktraces,
     this->Position->CompileOptionsPosition);
+
+  const char* include_regex =
+    parent->BuildSystemDirectory->Properties.GetPropertyValue(
+      "INCLUDE_REGULAR_EXPRESSION");
+  this->Position->BuildSystemDirectory->Properties.SetProperty(
+    "INCLUDE_REGULAR_EXPRESSION", include_regex);
 }
 
 cmState* cmStateSnapshot::GetState() const

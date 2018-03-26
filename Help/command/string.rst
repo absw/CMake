@@ -132,6 +132,15 @@ APPEND
 
 Append all the input arguments to the string.
 
+PREPEND
+"""""""
+
+::
+
+  string(PREPEND <string variable> [<input>...])
+
+Prepend all the input arguments to the string.
+
 CONCAT
 """"""
 
@@ -141,6 +150,16 @@ CONCAT
 
 Concatenate all the input arguments together and store
 the result in the named output variable.
+
+JOIN
+""""
+
+::
+
+  string(JOIN <glue> <output variable> [<input>...])
+
+Join all the input arguments together using the glue
+string and store the result in the named output variable.
 
 TOLOWER
 """""""
@@ -273,6 +292,18 @@ CONFIGURE
 
 Transform a string like :command:`configure_file` transforms a file.
 
+MAKE_C_IDENTIFIER
+"""""""""""""""""
+
+::
+
+  string(MAKE_C_IDENTIFIER <input string> <output variable>)
+
+Convert each non-alphanumeric character in the ``<input string>`` to an
+underscore and store the result in the ``<output variable>``.  If the first
+character of the string is a digit, an underscore will also be prepended to
+the result.
+
 RANDOM
 """"""
 
@@ -315,6 +346,7 @@ specifiers:
    %j        The day of the current year (001-366).
    %m        The month of the current year (01-12).
    %b        Abbreviated month name (e.g. Oct).
+   %B        Full month name (e.g. October).
    %M        The minute of the current hour (00-59).
    %s        Seconds since midnight (UTC) 1-Jan-1970 (UNIX time).
    %S        The second of the current minute.
@@ -322,6 +354,7 @@ specifiers:
    %U        The week number of the current year (00-53).
    %w        The day of the current week. 0 is Sunday. (0-6)
    %a        Abbreviated weekday name (e.g. Fri).
+   %A        Full weekday name (e.g. Friday).
    %y        The last two digits of the current year (00-99)
    %Y        The current year.
 
@@ -334,13 +367,6 @@ If no explicit ``<format string>`` is given it will default to:
 
    %Y-%m-%dT%H:%M:%S    for local time.
    %Y-%m-%dT%H:%M:%SZ   for UTC.
-
-
-::
-
-  string(MAKE_C_IDENTIFIER <input string> <output variable>)
-
-Write a string which can be used as an identifier in C.
 
 .. note::
 

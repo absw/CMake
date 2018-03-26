@@ -1,5 +1,8 @@
 # See adjacent README.rst for documentation of this test infrastructure.
 
+# Note that the _isMultiConfig variable is set in the parent directory's
+# CMakeLists.txt (slightly complex logic to support CMake versions before 3.9)
+
 macro(add_RunCMake_test test)
   set(TEST_ARGS ${ARGN})
   if ("${ARGV1}" STREQUAL "TEST_DIR")
@@ -14,7 +17,9 @@ macro(add_RunCMake_test test)
   endif()
   add_test(NAME RunCMake.${test} COMMAND ${CMAKE_CMAKE_COMMAND}
     -DCMAKE_MODULE_PATH=${CMAKE_CURRENT_SOURCE_DIR}
+    -DRunCMake_GENERATOR_IS_MULTI_CONFIG=${_isMultiConfig}
     -DRunCMake_GENERATOR=${CMAKE_GENERATOR}
+    -DRunCMake_GENERATOR_INSTANCE=${CMAKE_GENERATOR_INSTANCE}
     -DRunCMake_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}
     -DRunCMake_GENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}
     -DRunCMake_MAKE_PROGRAM=${CMake_TEST_EXPLICIT_MAKE_PROGRAM}
@@ -46,7 +51,9 @@ function(add_RunCMake_test_group test types)
       add_test(NAME RunCMake.${test}_${type} COMMAND ${CMAKE_CMAKE_COMMAND}
         -DTEST_TYPE=${type}
         -DCMAKE_MODULE_PATH=${CMAKE_CURRENT_SOURCE_DIR}
+        -DRunCMake_GENERATOR_IS_MULTI_CONFIG=${_isMultiConfig}
         -DRunCMake_GENERATOR=${CMAKE_GENERATOR}
+        -DRunCMake_GENERATOR_INSTANCE=${CMAKE_GENERATOR_INSTANCE}
         -DRunCMake_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}
         -DRunCMake_GENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}
         -DRunCMake_MAKE_PROGRAM=${CMake_TEST_EXPLICIT_MAKE_PROGRAM}
@@ -141,13 +148,18 @@ add_RunCMake_test(DisallowedCommands)
 add_RunCMake_test(ExternalData)
 add_RunCMake_test(FeatureSummary)
 add_RunCMake_test(FPHSA)
+add_RunCMake_test(FindBoost)
+add_RunCMake_test(FindOpenGL)
 if(NOT CMAKE_C_COMPILER_ID MATCHES "Watcom")
   add_RunCMake_test(GenerateExportHeader)
 endif()
 add_RunCMake_test(GeneratorExpression)
+add_RunCMake_test(GeneratorInstance)
 add_RunCMake_test(GeneratorPlatform)
 add_RunCMake_test(GeneratorToolset)
+add_RunCMake_test(GetPrerequisites)
 add_RunCMake_test(GNUInstallDirs -DSYSTEM_NAME=${CMAKE_SYSTEM_NAME})
+add_RunCMake_test(GoogleTest) # Note: does not actually depend on Google Test
 add_RunCMake_test(TargetPropertyGeneratorExpressions)
 add_RunCMake_test(Languages)
 add_RunCMake_test(LinkStatic)
@@ -164,6 +176,7 @@ add_RunCMake_test(CompileDefinitions)
 add_RunCMake_test(CompileFeatures)
 add_RunCMake_test(PolicyScope)
 add_RunCMake_test(WriteCompilerDetectionHeader)
+add_RunCMake_test(SourceProperties)
 if(NOT WIN32)
   add_RunCMake_test(PositionIndependentCode)
 endif()
@@ -179,6 +192,8 @@ add_RunCMake_test(Syntax)
 add_RunCMake_test(add_custom_command)
 add_RunCMake_test(add_custom_target)
 add_RunCMake_test(add_dependencies)
+add_RunCMake_test(add_executable)
+add_RunCMake_test(add_library)
 add_RunCMake_test(add_subdirectory)
 add_RunCMake_test(build_command)
 add_executable(exit_code exit_code.c)
@@ -210,6 +225,7 @@ add_RunCMake_test(find_library)
 add_RunCMake_test(find_package)
 add_RunCMake_test(find_path)
 add_RunCMake_test(find_program -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME})
+add_RunCMake_test(foreach)
 add_RunCMake_test(get_filename_component)
 add_RunCMake_test(get_property)
 add_RunCMake_test(if)
@@ -224,20 +240,38 @@ add_RunCMake_test(separate_arguments)
 add_RunCMake_test(set_property)
 add_RunCMake_test(string)
 add_RunCMake_test(test_include_dirs)
-foreach(var
-    CMAKE_C_COMPILER_ID
-    CMAKE_C_COMPILER_VERSION
-    CMAKE_C_STANDARD_DEFAULT
-    CMAKE_CXX_COMPILER_ID
-    CMAKE_CXX_COMPILER_VERSION
-    CMAKE_CXX_STANDARD_DEFAULT
-    CMake_TEST_CUDA
-    )
-  if(DEFINED ${var})
-    list(APPEND try_compile_ARGS -D${var}=${${var}})
+
+function(add_RunCMake_test_try_compile)
+  if(CMAKE_VERSION VERSION_LESS 3.9.20170907 AND "x${CMAKE_CXX_COMPILER_ID}" STREQUAL "xMSVC")
+    # Older CMake versions do not know about MSVC language standards.
+    # Approximate our logic from MSVC-CXX.cmake.
+    if ((CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.0.24215.1 AND
+         CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.10) OR
+       CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.10.25017)
+      set(CMAKE_CXX_STANDARD_DEFAULT 14)
+    elseif (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16.0)
+      set(CMAKE_CXX_STANDARD_DEFAULT "")
+    else()
+      unset(CMAKE_CXX_STANDARD_DEFAULT)
+    endif()
   endif()
-endforeach()
-add_RunCMake_test(try_compile)
+  foreach(var
+      CMAKE_C_COMPILER_ID
+      CMAKE_C_COMPILER_VERSION
+      CMAKE_C_STANDARD_DEFAULT
+      CMAKE_CXX_COMPILER_ID
+      CMAKE_CXX_COMPILER_VERSION
+      CMAKE_CXX_STANDARD_DEFAULT
+      CMake_TEST_CUDA
+      )
+    if(DEFINED ${var})
+      list(APPEND try_compile_ARGS -D${var}=${${var}})
+    endif()
+  endforeach()
+  add_RunCMake_test(try_compile)
+endfunction()
+add_RunCMake_test_try_compile()
+
 add_RunCMake_test(try_run)
 add_RunCMake_test(set)
 add_RunCMake_test(variable_watch)
@@ -304,7 +338,9 @@ add_RunCMake_test(install)
 add_RunCMake_test(CPackConfig)
 add_RunCMake_test(CPackInstallProperties)
 add_RunCMake_test(ExternalProject)
+add_RunCMake_test(FetchContent)
 add_RunCMake_test(CTestCommandLine)
+add_RunCMake_test(CacheNewline)
 # Only run this test on unix platforms that support
 # symbolic links
 if(UNIX)
@@ -317,11 +353,14 @@ add_RunCMake_test(IfacePaths_INCLUDE_DIRECTORIES TEST_DIR IfacePaths)
 set(IfacePaths_SOURCES_ARGS -DTEST_PROP=SOURCES)
 add_RunCMake_test(IfacePaths_SOURCES TEST_DIR IfacePaths)
 
-add_RunCMake_test(COMPILE_LANGUAGE-genex)
-
 # Matlab module related tests
 if(CMake_TEST_FindMatlab)
   add_RunCMake_test(FindMatlab)
+endif()
+
+# UseSWIG related tests
+if(CMake_TEST_UseSWIG)
+  add_RunCMake_test(UseSWIG)
 endif()
 
 add_executable(pseudo_emulator pseudo_emulator.c)
@@ -342,11 +381,22 @@ if("${CMAKE_GENERATOR}" MATCHES "Make|Ninja")
   add_executable(pseudo_tidy pseudo_tidy.c)
   add_executable(pseudo_iwyu pseudo_iwyu.c)
   add_executable(pseudo_cpplint pseudo_cpplint.c)
+  add_executable(pseudo_cppcheck pseudo_cppcheck.c)
   add_RunCMake_test(ClangTidy -DPSEUDO_TIDY=$<TARGET_FILE:pseudo_tidy>)
   add_RunCMake_test(IncludeWhatYouUse -DPSEUDO_IWYU=$<TARGET_FILE:pseudo_iwyu>)
   add_RunCMake_test(Cpplint -DPSEUDO_CPPLINT=$<TARGET_FILE:pseudo_cpplint>)
+  add_RunCMake_test(Cppcheck -DPSEUDO_CPPCHECK=$<TARGET_FILE:pseudo_cppcheck>)
+  add_RunCMake_test(MultiLint
+    -DPSEUDO_TIDY=$<TARGET_FILE:pseudo_tidy>
+    -DPSEUDO_IWYU=$<TARGET_FILE:pseudo_iwyu>
+    -DPSEUDO_CPPLINT=$<TARGET_FILE:pseudo_cpplint>
+    -DPSEUDO_CPPCHECK=$<TARGET_FILE:pseudo_cppcheck>
+    )
   if(DEFINED CMake_TEST_CUDA)
     list(APPEND CompilerLauncher_ARGS -DCMake_TEST_CUDA=${CMake_TEST_CUDA})
+  endif()
+  if(CMAKE_Fortran_COMPILER)
+    list(APPEND CompilerLauncher_ARGS -DCMake_TEST_Fortran=1)
   endif()
   add_RunCMake_test(CompilerLauncher)
   add_RunCMake_test(ctest_labels_for_subprojects)

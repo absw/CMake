@@ -11,6 +11,7 @@ Synopsis
  cmake [<options>] (<path-to-source> | <path-to-existing-build>)
  cmake [(-D <var>=<value>)...] -P <cmake-script-file>
  cmake --build <dir> [<options>...] [-- <build-tool-options>...]
+ cmake --open <dir>
  cmake -E <command> [<options>...]
  cmake --find-package <options>...
 
@@ -51,6 +52,10 @@ Options
 ``--build <dir>``
  See `Build Tool Mode`_.
 
+``--open <dir>``
+ Open the generated project in the associated application.  This is
+ only supported by some generators.
+
 ``-N``
  View mode only.
 
@@ -69,11 +74,11 @@ Options
  See `Find-Package Tool Mode`_.
 
 ``--graphviz=[file]``
- Generate graphviz of dependencies, see CMakeGraphVizOptions.cmake for more.
+ Generate graphviz of dependencies, see :module:`CMakeGraphVizOptions` for more.
 
  Generate a graphviz input file that will contain all the library and
  executable dependencies in the project.  See the documentation for
- CMakeGraphVizOptions.cmake for more details.
+ :module:`CMakeGraphVizOptions` for more details.
 
 ``--system-information [file]``
  Dump information about this system.
@@ -137,6 +142,8 @@ Options
  warn about other files as well.
 
 .. include:: OPTIONS_HELP.txt
+
+.. _`Build Tool Mode`:
 
 Build Tool Mode
 ===============
@@ -330,7 +337,7 @@ Available commands are:
     ``paxr`` (restricted pax, default), and ``zip``.
 
 ``time <command> [<args>...]``
-  Run command and return elapsed time.
+  Run command and display elapsed time.
 
 ``touch <file>``
   Touch a file.
