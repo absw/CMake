@@ -1733,12 +1733,12 @@ void cmGlobalIarGenerator::Project::CreateDebuggerFile()
     cspyData->NewOption("CEndian")->NewState("1");
     cspyData->NewOption("CProcessor")->NewState("1");
     cspyData->NewOption("OCVariant")->NewState("0");
-    cspyData->NewOption("MacOverride")->NewState("1");
+    cspyData->NewOption("MacOverride")->NewState(GLOBALCFG.dbgCspyMacfile.empty() ? "0" : "1");
     cspyData->NewOption("MacFile")
-            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgCspyMacfile);
-    cspyData->NewOption("MemOverride")->NewState("1");
+            ->NewState(GLOBALCFG.dbgCspyMacfile);
+    cspyData->NewOption("MemOverride")->NewState(GLOBALCFG.dbgCspyMemfile.empty() ? "0" : "1");
     cspyData->NewOption("MemFile")
-            ->NewState(cmGlobalIarGenerator::GLOBALCFG.dbgCspyMemfile);
+            ->NewState(GLOBALCFG.dbgCspyMemfile);
     cspyData->NewOption("RunToEnable")->NewState(isDebug ? "1" : "0");
     cspyData->NewOption("RunToName")->NewState("main");
 
