@@ -1177,8 +1177,8 @@ void cmGlobalIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
   }
 
   // Prebuild & postbuild.    
-  std::string prebuild = project->binaryDir + "/" + buildCfg.exeDir+"/"+project->name+"_prebuild.bat";
-  std::string postbuild = project->binaryDir + "/" + buildCfg.exeDir+"/"+project->name+"_postbuild.bat";
+  std::string prebuild = project->name+"_prebuild.bat";
+  std::string postbuild = project->name+"_postbuild.bat";
 
   std::string buildCmd = "";
   buildCmd.reserve(2048);
