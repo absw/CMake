@@ -698,6 +698,12 @@ void cmGlobalIarGenerator::Generate()
   GLOBALCFG.cxxExtraOptionsOverride =
     globalMakefile->GetSafeDefinition("IAR_CXX_EXTRA_OPTIONS");
 
+  const std::string ParallelBuilds =
+    globalMakefile->GetSafeDefinition("IAR_PARALLEL_BUILDS");
+  if (!ParallelBuilds.empty()) {
+    GLOBALCFG.parallelBuilds = " -parallel " + ParallelBuilds;
+  }
+
   GLOBALCFG.rtos = globalMakefile->GetSafeDefinition("IAR_TARGET_RTOS");
 
   // Pre-include support is not included in regular cmake (--include header.h)
@@ -1150,7 +1156,7 @@ void cmGlobalIarGenerator::ConvertTargetToProject(const cmTarget& tgt,
 
   cmGlobalIarGenerator::BuildConfig buildCfg;
   buildCfg.name = GLOBALCFG.buildType;
-  buildCfg.isDebug = (GLOBALCFG.buildType == "Debug");
+  buildCfg.isDebug = (GLOBALCFG.buildType == "Debug");  
   buildCfg.exeDir = buildCfg.name + "/Exe";
   buildCfg.objectDir = buildCfg.name + "/Obj";
   buildCfg.listDir = buildCfg.name + "/Lst";
@@ -2231,8 +2237,7 @@ std::string cmGlobalIarGenerator::GenerateBuildScript(const std::string &project
     std::string projPathWin = workDir + projectName;
     std::replace(projPathWin.begin(), projPathWin.end(), '/', '\\');
     batchOutput += "\"" + iarBuildCmd + "\" \""
-      + projPathWin + "\" -build "
-      + cmGlobalIarGenerator::GLOBALCFG.buildType + " -log all\n";
+      + projPathWin + "\" -build " + cmGlobalIarGenerator::GLOBALCFG.buildType + " -log all\n";
 
   batchOutput += "\n\nREM ===================================================\n";
   batchOutput += "REM END IAR BUILD.\n";
@@ -2310,9 +2315,10 @@ void cmGlobalIarGenerator::Workspace::CreateWorkspaceFile()
           // Add batch command.
           std::string projPathWin = projPath;
           std::replace( projPathWin.begin(), projPathWin.end(), '/', '\\');
-          batchOutput += "\"" + iarBuildCmd + "\" \""
-                  + projPathWin + "\" -build "
-                  + cmGlobalIarGenerator::GLOBALCFG.buildType +" -log all\n";
+          batchOutput += "\"" + iarBuildCmd + "\" \"" + projPathWin 
+                         + "\" -build " + cmGlobalIarGenerator::GLOBALCFG.buildType
+                         + cmGlobalIarGenerator::GLOBALCFG.parallelBuilds
+                         + " -log all\n";
       }
       else
       {
@@ -2341,9 +2347,10 @@ void cmGlobalIarGenerator::Workspace::CreateWorkspaceFile()
       // Add batch command.
       std::string projPathWin = projPath;
       std::replace( projPathWin.begin(), projPathWin.end(), '/', '\\');
-      batchOutput += "\"" + iarBuildCmd + "\" \""
-              + projPathWin + "\" -build "
-              + cmGlobalIarGenerator::GLOBALCFG.buildType +" -log all\n";
+      batchOutput += "\"" + iarBuildCmd + "\" \"" + projPathWin
+                     + "\" -build " + cmGlobalIarGenerator::GLOBALCFG.buildType
+                     + cmGlobalIarGenerator::GLOBALCFG.parallelBuilds
+                     + " -log all\n";
     }
 
   batchOutput += "\n\nREM ===================================================\n";

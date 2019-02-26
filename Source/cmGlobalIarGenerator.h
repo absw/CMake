@@ -359,6 +359,7 @@ private:
     std::string CCOptLevel          ;
     std::string CCOptLevelSlave     ;
     std::string cxxExtraOptionsOverride;
+    std::string parallelBuilds;
     std::string scanfFmt  ;
     std::string printfFmt  ;
     int scanfFmtId  ;
